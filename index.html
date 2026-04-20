@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VELDEX</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            bg: "#0b0f14",
+            panel: "#121821",
+            panel2: "#18202b",
+            line: "#273244",
+            text: "#e5edf7",
+            muted: "#8ea0b8",
+            accent: "#22d3ee",
+            accent2: "#f59e0b"
+          }
+        }
+      }
+    };
+  </script>
+</head>
+
+<body id="dashboard-page" class="bg-bg text-text min-h-screen">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-panel border-r border-line p-4 hidden md:flex md:flex-col">
+      <div class="mb-8">
+        <h1 class="text-2xl font-bold text-accent">VELDEX</h1>
+        <p class="text-sm text-muted">Corp Mining Tool</p>
+      </div>
+
+      <nav class="space-y-2">
+        <button data-view="view-dashboard" class="nav-btn w-full text-left px-3 py-2 rounded bg-panel2 hover:bg-line">Dashboard</button>
+        <button data-view="view-add" class="nav-btn w-full text-left px-3 py-2 rounded hover:bg-line">Ajouter minerai</button>
+        <button data-view="view-my" class="nav-btn w-full text-left px-3 py-2 rounded hover:bg-line">Mon registre</button>
+        <button data-view="view-corp" class="nav-btn w-full text-left px-3 py-2 rounded hover:bg-line">Corporation</button>
+        <button data-view="view-invitations" class="nav-btn w-full text-left px-3 py-2 rounded hover:bg-line">Invitations</button>
+        <button data-view="view-profile" class="nav-btn w-full text-left px-3 py-2 rounded hover:bg-line">Profil</button>
+      </nav>
+
+      <div class="mt-auto pt-6">
+        <button id="logout-btn" class="w-full px-3 py-2 rounded bg-red-600 hover:bg-red-500 text-white">
+          Logout
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 p-4 md:p-6 space-y-6">
+      <!-- Mobile quick nav -->
+      <div class="md:hidden grid grid-cols-2 gap-2">
+        <button data-view="view-dashboard" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Dashboard</button>
+        <button data-view="view-add" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Ajouter</button>
+        <button data-view="view-my" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Mon registre</button>
+        <button data-view="view-corp" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Corporation</button>
+        <button data-view="view-invitations" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Invitations</button>
+        <button data-view="view-profile" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Profil</button>
+      </div>
+
+      <!-- DASHBOARD -->
+      <section id="view-dashboard" class="view-section space-y-6">
+        <div>
+          <h2 class="text-2xl font-bold">Dashboard</h2>
+          <p class="text-muted">Vue globale de la corporation</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-panel border border-line rounded-xl p-4">
+            <p class="text-sm text-muted">Total SCU</p>
+            <p id="stat-total-scu" class="text-3xl font-bold">0.00</p>
+          </div>
+
+          <div class="bg-panel border border-line rounded-xl p-4">
+            <p class="text-sm text-muted">Total UNIT</p>
+            <p id="stat-total-unit" class="text-3xl font-bold">0</p>
+          </div>
+        </div>
+
+        <div class="bg-panel border border-line rounded-xl p-4">
+          <label for="mineral-search" class="block text-sm text-muted mb-2">Rechercher un minerai</label>
+          <input
+            id="mineral-search"
+            type="text"
+            placeholder="Ex : Gold, Hadanite, Bexalite..."
+            class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
+          />
+
+          <div class="mt-6">
+            <h3 class="text-lg font-semibold mb-3">Top 3 résultats</h3>
+            <div id="search-top-results" class="space-y-2">
+              <p class="text-muted">Tape un minerai pour voir les 3 meilleurs.</p>
+            </div>
+          </div>
+
+          <div class="mt-6">
+            <h3 class="text-lg font-semibold mb-3">Total par minerai</h3>
+            <div id="totals-by-mineral" class="space-y-1"></div>
+          </div>
+
+          <div class="mt-6">
+            <h3 class="text-lg font-semibold mb-3">Dernières entrées</h3>
+            <div id="recent-entries" class="space-y-1"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AJOUTER -->
+      <section id="view-add" class="view-section hidden space-y-6">
+        <div>
+          <h2 class="text-2xl font-bold">Ajouter minerai</h2>
+          <p class="text-muted">Ajouter une nouvelle entrée</p>
+        </div>
+
+        <section class="bg-panel border border-line rounded-xl p-6">
+          <form id="add-entry-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="mineral_name" class="block text-sm text-muted mb-1">Minerai</label>
+              <select
+                id="mineral_name"
+                name="mineral_name"
+                class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
+                required
+              >
+                <option value="">Choisir un minerai</option>
+
+                <option value="Jacluium">Jacluium</option>
+                <option value="Carinite">Carinite</option>
+                <option value="Aphorite">Aphorite</option>
+                <option value="Glacosite">Glacosite</option>
+                <option value="Dolivine">Dolivine</option>
+                <option value="Beradom">Beradom</option>
+                <option value="Feynmaline">Feynmaline</option>
+                <option value="Hadanite">Hadanite</option>
+                <option value="Janalite">Janalite</option>
+                <option value="Saldynium">Saldynium</option>
+
+                <option value="Agricium">Agricium</option>
+                <option value="Aluminium">Aluminium</option>
+                <option value="Aslarite">Aslarite</option>
+                <option value="Beryl">Beryl</option>
+                <option value="Bexalite">Bexalite</option>
+                <option value="Borase">Borase</option>
+                <option value="Copper">Copper</option>
+                <option value="Corundum">Corundum</option>
+                <option value="Gold">Gold</option>
+                <option value="Hephaestanite">Hephaestanite</option>
+                <option value="Ice">Ice</option>
+                <option value="Iron">Iron</option>
+                <option value="Laranite">Laranite</option>
+                <option value="Lindinium">Lindinium</option>
+                <option value="Quartz">Quartz</option>
+                <option value="Quantainium">Quantainium</option>
+                <option value="Riccite">Riccite</option>
+                <option value="Sadaryx">Sadaryx</option>
+                <option value="Savrilum">Savrilum</option>
+                <option value="Silicon">Silicon</option>
+                <option value="Stileron">Stileron</option>
+                <option value="Taranite">Taranite</option>
+                <option value="Tin">Tin</option>
+                <option value="Titanium">Titanium</option>
+                <option value="Torite">Torite</option>
+                <option value="Tungsten">Tungsten</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="unit_type" class="block text-sm text-muted mb-1">Unité</label>
+              <input
+                id="unit_type"
+                name="unit_type"
+                type="text"
+                readonly
+                placeholder="Automatique"
+                class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
+              />
+            </div>
+
+            <div>
+              <label for="quantity" class="block text-sm text-muted mb-1">Quantité</label>
+              <input
+                id="quantity"
+                name="quantity"
+                type="number"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="Ex : 0.03"
+                class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
+                required
+              />
+            </div>
+
+            <div>
+              <label for="quality" class="block text-sm text-muted mb-1">Qualité</label>
+              <input
+                id="quality"
+                name="quality"
+                type="number"
+                min="0"
+                max="1000"
+                step="1"
+                placeholder="Ex : 84"
+                class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
+                required
+              />
+            </div>
+
+            <div class="md:col-span-2 flex items-center gap-3 pt-2">
+              <button
+                type="submit"
+                class="rounded-lg bg-accent hover:bg-cyan-400 px-4 py-2 text-black font-medium"
+              >
+                Ajouter
+              </button>
+              <p id="form-message" class="text-sm text-muted"></p>
+            </div>
+          </form>
+        </section>
+      </section>
+
+      <!-- MON REGISTRE -->
+      <section id="view-my" class="view-section hidden space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-bold">Mon registre</h2>
+            <p class="text-muted">Mes entrées personnelles</p>
+          </div>
+          <button
+            id="refresh-my-storage"
+            class="rounded-lg bg-panel border border-line hover:bg-panel2 px-3 py-2 text-sm"
+            type="button"
+          >
+            Rafraîchir
+          </button>
+        </div>
+
+        <section class="bg-panel border border-line rounded-xl p-6">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead>
+                <tr class="border-b border-line text-muted">
+                  <th class="py-3 pr-4">Minerai</th>
+                  <th class="py-3 pr-4">Quantité</th>
+                  <th class="py-3 pr-4">Unité</th>
+                  <th class="py-3 pr-4">Qualité</th>
+                  <th class="py-3 pr-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="my-storage-body">
+                <tr>
+                  <td colspan="5" class="py-4 text-muted">Aucune donnée chargée.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <!-- CORPORATION -->
+<section id="view-corp" class="view-section hidden space-y-6">
+  <div>
+    <h2 class="text-2xl font-bold">Corporation</h2>
+    <p class="text-muted">Informations et stockage global</p>
+  </div>
+
+  <section class="bg-panel border border-line rounded-xl p-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <p class="text-sm text-muted mb-1">Nom de corporation</p>
+        <p id="corp-display-name" class="text-xl font-bold">NO CORPORATION</p>
+      </div>
+
+      <div>
+        <p class="text-sm text-muted mb-1">Rôle</p>
+        <p id="corp-role-badge" class="text-lg font-semibold text-accent2">RANK: NONE</p>
+      </div>
+
+      <div>
+        <p class="text-sm text-muted mb-1">Référence</p>
+        <p id="corp-ref">REF: N/A</p>
+      </div>
+
+      <div>
+        <p class="text-sm text-muted mb-1">Opérations</p>
+        <p id="corp-operations">IDLE</p>
+      </div>
+
+      <div>
+        <p class="text-sm text-muted mb-1">Membres</p>
+        <p id="corp-members-count">0</p>
+      </div>
+
+      <div>
+        <p class="text-sm text-muted mb-1">Invitations</p>
+        <p id="corp-pending-count">0</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- STOCKAGE CORPORATION -->
+  <section class="bg-panel border border-line rounded-xl p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-xl font-semibold">Stockage corporation</h3>
+      <button
+        id="refresh-corp-storage"
+        class="rounded-lg bg-panel2 hover:bg-line px-3 py-2 text-sm"
+        type="button"
+      >
+        Rafraîchir
+      </button>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-line text-muted">
+            <th class="py-3 pr-4">Minerai</th>
+            <th class="py-3 pr-4">Quantité</th>
+            <th class="py-3 pr-4">Unité</th>
+            <th class="py-3 pr-4">Qualité</th>
+            <th class="py-3 pr-4">Ajouté par</th>
+          </tr>
+        </thead>
+        <tbody id="corp-storage-body">
+          <tr>
+            <td colspan="5" class="py-4 text-muted">Aucune donnée chargée.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- MEMBRES DE LA CORPORATION -->
+  <section class="bg-panel border border-line rounded-xl p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-xl font-semibold">Membres de la corporation</h3>
+      <button
+        id="refresh-members"
+        class="rounded-lg bg-panel2 hover:bg-line px-3 py-2 text-sm"
+        type="button"
+      >
+        Rafraîchir
+      </button>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-line text-muted">
+            <th class="py-3 pr-4">Username</th>
+            <th class="py-3 pr-4">Rôle</th>
+            <th class="py-3 pr-4">Action</th>
+          </tr>
+        </thead>
+        <tbody id="corp-members-body">
+          <tr>
+            <td colspan="3" class="py-4 text-muted">Aucune donnée chargée.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  
+  <section class="bg-panel border border-line rounded-xl p-6">
+    <h3 class="text-xl font-semibold mb-4">Créer une corporation</h3>
+    <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
+      <input
+        id="corp-name"
+        type="text"
+        placeholder="Nom de la corporation"
+        class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
+      />
+      <button
+        id="create-corp-btn"
+        class="rounded-lg bg-accent2 hover:bg-amber-400 px-4 py-2 text-black font-medium"
+        type="button"
+      >
+        Créer
+      </button>
+    </div>
+    <p id="corp-status" class="mt-3 text-sm text-muted"></p>
+  </section>
+</section>
+
+      <!-- INVITATIONS -->
+      <section id="view-invitations" class="view-section hidden space-y-6">
+        <div>
+          <h2 class="text-2xl font-bold">Invitations</h2>
+          <p class="text-muted">Inviter et gérer les invitations</p>
+        </div>
+
+        <section class="bg-panel border border-line rounded-xl p-6">
+          <h3 class="text-xl font-semibold mb-4">Inviter un joueur</h3>
+          <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
+            <input
+              id="invite-username"
+              type="text"
+              placeholder="Username du joueur"
+              class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
+            />
+            <button
+              id="invite-btn"
+              class="rounded-lg bg-accent hover:bg-cyan-400 px-4 py-2 text-black font-medium"
+              type="button"
+            >
+              Inviter
+            </button>
+          </div>
+          <p id="invite-status" class="mt-3 text-sm text-muted"></p>
+        </section>
+
+        <section class="bg-panel border border-line rounded-xl p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-semibold">Invitations reçues</h3>
+            <div class="flex items-center gap-3">
+              <span id="pending-invitations-badge" class="text-sm text-accent">0 PENDING</span>
+              <button
+                id="refresh-invitations-btn"
+                class="rounded-lg bg-panel2 hover:bg-line px-3 py-2 text-sm"
+                type="button"
+              >
+                Rafraîchir
+              </button>
+            </div>
+          </div>
+
+          <div id="invitations-list" class="space-y-3">
+            <div class="text-sm text-muted">No pending invitations.</div>
+          </div>
+
+          <p id="invitations-status" class="mt-4 text-sm text-muted"></p>
+        </section>
+      </section>
+
+      <!-- PROFIL -->
+      <section id="view-profile" class="view-section hidden space-y-6">
+        <div>
+          <h2 class="text-2xl font-bold">Profil</h2>
+          <p class="text-muted">Informations du compte</p>
+        </div>
+
+        <section class="bg-panel border border-line rounded-xl p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <p class="text-sm text-muted mb-1">Username</p>
+            <p id="user-display-name" class="text-lg font-bold">UNKNOWN</p>
+          </div>
+
+          <div>
+            <p class="text-sm text-muted mb-1">Corporation active</p>
+            <p id="user-linked-corp">NO ACTIVE CORPORATION</p>
+          </div>
+
+          <div>
+            <p class="text-sm text-muted mb-1">Clearance</p>
+            <p id="user-clearance" class="text-accent2">LEVEL 1 MEMBER</p>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
