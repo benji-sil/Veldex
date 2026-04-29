@@ -77,31 +77,24 @@ export function isAuthPage() {
 }
 
 export function showToast(message, type = "success") {
-  const container = $("toast-container");
-  if (!container) return;
-
   const toast = document.createElement("div");
-  const bgColor = type === "success" ? "bg-green-500/20 border-green-500/50 text-green-400" : "bg-red-500/20 border-red-500/50 text-red-400";
-  
-  toast.className = `flex items-center gap-2 px-4 py-3 rounded-sm border ${bgColor} backdrop-blur-md transition-all duration-300 transform translate-y-4 opacity-0 pointer-events-auto shadow-lg`;
-  
-  toast.innerHTML = `
-    <span class="font-sans text-sm font-medium">${escapeHtml(message)}</span>
-  `;
+  toast.className = `toast toast-${type}`;
+  toast.innerText = message;
+  document.body.appendChild(toast);
 
-  container.appendChild(toast);
+  // Trigger layout for transition
+  toast.offsetHeight;
 
-  // Trigger animation
   requestAnimationFrame(() => {
-    toast.classList.remove("translate-y-4", "opacity-0");
+    toast.classList.add("visible");
   });
 
-  // Auto remove
   setTimeout(() => {
-    toast.classList.add("translate-y-4", "opacity-0");
+    toast.classList.remove("visible");
     setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  }, 2500);
 }
+
 
 export async function fetchGameVersions() {
   try {
@@ -119,4 +112,12 @@ export async function fetchGameVersions() {
     window.VELDEX_GAME_VERSIONS = { live: "N/A", ptu: "N/A", status: "error" };
     return { live: "N/A", ptu: "N/A", status: "error" };
   }
+}
+
+export function toggleMobileSticky(visible) {
+  const bars = document.querySelectorAll(".container-action-mobile");
+  bars.forEach(bar => {
+    if (visible) bar.classList.remove("is-hidden");
+    else bar.classList.add("is-hidden");
+  });
 }

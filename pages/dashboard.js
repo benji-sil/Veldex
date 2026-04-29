@@ -97,15 +97,24 @@ function populateDashboardFilters() {
   });
 
   const populateSelect = (selectEl, setValues) => {
+    const isClassFilter = selectEl.id === "dash-filter-uex-class" || selectEl.id === "filter-uex-class";
     const firstOpt = selectEl.options[0];
     selectEl.innerHTML = "";
     selectEl.appendChild(firstOpt);
-    Array.from(setValues).sort().forEach(val => {
-      const opt = document.createElement("option");
-      opt.value = val;
-      opt.textContent = val;
-      selectEl.appendChild(opt);
-    });
+    
+    Array.from(setValues)
+      .filter(val => {
+        // If it's the Class filter, ignore numeric values (like purity 1000, 850, etc.)
+        if (isClassFilter && !isNaN(val)) return false;
+        return true;
+      })
+      .sort()
+      .forEach(val => {
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = val;
+        selectEl.appendChild(opt);
+      });
   };
 
   const populateSelectWithLabels = (selectEl, setValues) => {

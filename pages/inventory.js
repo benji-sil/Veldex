@@ -1,5 +1,6 @@
 import { supabase } from "../services/supabase.js";
-import { $, formatUnit, showFormError, showFormSuccess, escapeHtml, showToast, logger } from "../scripts/utils.js";
+import { $, formatUnit, showFormError, showFormSuccess, escapeHtml, showToast, logger, toggleMobileSticky } from "../scripts/utils.js";
+
 import { store } from "../scripts/store.js";
 import { showView } from "../scripts/router.js";
 import { showAlert, showConfirm } from "../components/modal.js";
@@ -231,9 +232,9 @@ function renderLocationAndApply(visibilityValue = 'corp') {
     <div class="relative space-y-3 mt-4">
       <label for="uex-location" class="text-[13px] font-display font-semibold text-muted uppercase tracking-widest block">Station / Localisation</label>
       <input id="uex-location" type="text" placeholder="Rechercher une station..." autocomplete="off" class="veldex-input w-full h-12" />
-      <div id="location-autocomplete-list" class="absolute z-50 left-0 right-0 top-full mt-1 bg-panel border border-line rounded-sm shadow-2xl hidden veldex-scroll max-h-64 overflow-y-auto"></div>
+      <div id="location-autocomplete-list" class="absolute z-50 left-0 right-0 top-full mt-1 bg-panel border border-line rounded-sm shadow-2xl hidden veldex-scroll autocomplete-dropdown overflow-y-auto"></div>
     </div>
-    <div class="pt-6 border-t border-line mt-6">
+    <div class="pt-6 border-t border-line mt-6 container-action-mobile">
       ${isEditing ? `<p class="text-[12px] text-accent font-display font-bold uppercase tracking-widest mb-4 animate-pulse">✏️ Mode édition actif</p>` : ''}
       <button id="uex-apply-btn" type="button" class="${btnClass}">
         ${btnLabel}
@@ -650,6 +651,7 @@ export function bindUexTest() {
       if (val.length < 2) {
         locAutocompleteList.classList.add("hidden");
         locAutocompleteList.innerHTML = "";
+        toggleMobileSticky(true);
         return;
       }
 
@@ -662,6 +664,8 @@ export function bindUexTest() {
         }
 
         locAutocompleteList.classList.remove("hidden");
+        toggleMobileSticky(false);
+
         locAutocompleteList.innerHTML = results.map(station => {
           const lowerName = station.toLowerCase();
           const lowerQuery = val.toLowerCase();
@@ -687,6 +691,7 @@ export function bindUexTest() {
           div.addEventListener("click", () => {
             locInput.value = div.dataset.value;
             locAutocompleteList.classList.add("hidden");
+            toggleMobileSticky(true);
           });
         });
       }, 150);
@@ -699,6 +704,7 @@ export function bindUexTest() {
     const locAutocompleteList = $("location-autocomplete-list");
     if (locInput && locAutocompleteList && !locInput.contains(e.target) && !locAutocompleteList.contains(e.target)) {
       locAutocompleteList.classList.add("hidden");
+      toggleMobileSticky(true);
     }
   });
 
@@ -983,16 +989,23 @@ function populateInventoryFilters() {
       logger.warn("Inventory", "Filter select element not found.");
       return;
     }
+    const isClassFilter = selectEl.id === "filter-uex-class";
     const firstOpt = selectEl.options[0];
     selectEl.innerHTML = "";
     if (firstOpt) selectEl.appendChild(firstOpt);
     
-    Array.from(setValues).sort().forEach(val => {
-      const opt = document.createElement("option");
-      opt.value = val;
-      opt.textContent = val;
-      selectEl.appendChild(opt);
-    });
+    Array.from(setValues)
+      .filter(val => {
+        if (isClassFilter && !isNaN(val)) return false;
+        return true;
+      })
+      .sort()
+      .forEach(val => {
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = val;
+        selectEl.appendChild(opt);
+      });
   };
 
   const populateSelectWithLabels = (selectEl, setValues) => {
@@ -1669,6 +1682,7 @@ export function bindOcr() {
     if (val.length < 2) {
       ocrLocList?.classList.add("hidden");
       if (ocrLocList) ocrLocList.innerHTML = "";
+      toggleMobileSticky(true);
       return;
     }
     _ocrLocTimeout = setTimeout(() => {
@@ -1679,6 +1693,8 @@ export function bindOcr() {
         return;
       }
       ocrLocList.classList.remove("hidden");
+      toggleMobileSticky(false);
+
       ocrLocList.innerHTML = results.map(station => {
         const lo = station.toLowerCase();
         const lq = val.toLowerCase();
@@ -1696,6 +1712,7 @@ export function bindOcr() {
         div.addEventListener("click", () => {
           ocrLocInput.value = div.dataset.value;
           ocrLocList.classList.add("hidden");
+          toggleMobileSticky(true);
         });
       });
     }, 150);
@@ -1707,6 +1724,7 @@ export function bindOcr() {
       !ocrLocInput.contains(e.target) &&
       !ocrLocList.contains(e.target)) {
       ocrLocList.classList.add("hidden");
+      toggleMobileSticky(true);
     }
   });
 

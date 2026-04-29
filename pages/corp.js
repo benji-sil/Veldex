@@ -1,7 +1,8 @@
 import { supabase } from "../services/supabase.js";
 import { $, setText, escapeHtml, getCurrentUser, logger } from "../scripts/utils.js";
 import { store } from "../scripts/store.js";
-import { showAlert, showConfirm } from "../components/modal.js";
+import { showAlert, showConfirm, showPrompt } from "../components/modal.js";
+
 import { updateHeaderUser } from "../components/header.js";
 
 const triggerReload = () => window.dispatchEvent(new Event("reload-all-data"));
@@ -23,19 +24,33 @@ export async function getCurrentUserCorporationId(userId) {
 
 export async function createCorporation() {
   const user = await getCurrentUser();
-  if (!user) return;
+  if (!user) {
+    await showAlert("Connexion requise", "Vous devez être connecté pour créer une corporation.");
+    return;
+  }
 
-  const corpName = $("corp-name")?.value.trim();
-  if (!corpName) return;
-
+  // Check if already in a corporation
   const { data: existingMembership, error: membershipError } = await supabase
     .from("corporation_members")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (membershipError || existingMembership) return;
+  if (membershipError) {
+    logger.error("Corporation", "Check membership error:", membershipError);
+    return;
+  }
 
+  if (existingMembership) {
+    await showAlert("Action impossible", "Vous faites déjà partie d'une corporation.");
+    return;
+  }
+
+  const corpName = await showPrompt("Créer une corporation", "Entrez le nom de votre nouvelle corporation :", "Nom de la corporation");
+  
+  if (!corpName) return; // User cancelled or entered empty string
+
+  // Create the corporation
   const { data: corpData, error: corpError } = await supabase
     .from("corporations")
     .insert({
@@ -45,8 +60,13 @@ export async function createCorporation() {
     .select()
     .single();
 
-  if (corpError) return;
+  if (corpError) {
+    logger.error("Corporation", "Create corp error:", corpError);
+    await showAlert("Erreur", "Impossible de créer la corporation : " + corpError.message);
+    return;
+  }
 
+  // Add the owner as the first member
   const { error: memberError } = await supabase
     .from("corporation_members")
     .insert({
@@ -55,13 +75,20 @@ export async function createCorporation() {
       role: "owner"
     });
 
-  if (memberError) return;
+  if (memberError) {
+    logger.error("Corporation", "Add owner member error:", memberError);
+    await showAlert("Erreur", "Corporation créée, mais erreur lors de votre ajout en tant que membre.");
+    return;
+  }
 
-  $("corp-name").value = "";
   store.currentCorporationId = corpData.id;
-
+  await loadMyCorporation();
   triggerReload();
+  
+  showToast(`Corporation "${corpName}" créée !`);
 }
+
+
 
 export async function loadMyCorporation() {
   const user = await getCurrentUser();
@@ -90,6 +117,7 @@ export async function loadMyCorporation() {
   if (error || !data) {
     updateHeaderUser(profile?.username, "LEVEL 1 MEMBER", "Sans corporation");
     if ($("corp-page-title")) $("corp-page-title").textContent = "Aucune corporation";
+    if ($("create-corp-btn")) $("create-corp-btn").classList.remove("hidden");
     return;
   }
 
@@ -110,7 +138,9 @@ export async function loadMyCorporation() {
 
   updateHeaderUser(profile?.username, roleLabel, corpName);
   if ($("corp-page-title")) $("corp-page-title").textContent = corpName;
+  if ($("create-corp-btn")) $("create-corp-btn").classList.add("hidden");
 }
+
 
 export function getRoleLabel(role) {
   const roleMap = {

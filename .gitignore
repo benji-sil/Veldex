@@ -1,5 +1,6 @@
 .env
 .env.local
+config/env.js
 node_modules/
 supabase/.temp/
 .DS_Store

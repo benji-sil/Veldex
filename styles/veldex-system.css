@@ -21,6 +21,11 @@
 }
 
 /* Base Body Styles */
+html, body {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
 body {
     background-color: var(--bg);
     color: var(--text);
@@ -28,7 +33,10 @@ body {
     font-size: 15px;
     line-height: var(--line-height-base);
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
+
 
 /* SCROLLBARS */
 .veldex-scroll {
@@ -427,19 +435,39 @@ body {
 }
 
 body.is-dashboard {
-    height: 100vh;
-    overflow: hidden;
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
 }
 
 body.is-dashboard .main-content {
-    height: 100vh;
-    overflow: hidden;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
 }
 
 body.is-dashboard #view-dashboard {
-    height: calc(100vh - 84px);
-    overflow: hidden;
+    height: auto;
+    min-height: calc(100vh - 84px);
+    overflow: visible;
 }
+
+/* Tablet/Desktop overrides to restore fixed layout if desired */
+@media (min-width: 1025px) {
+    body.is-dashboard {
+        height: 100vh;
+        overflow: hidden;
+    }
+    body.is-dashboard .main-content {
+        height: 100vh;
+        overflow: hidden;
+    }
+    body.is-dashboard #view-dashboard {
+        height: calc(100vh - 84px);
+        overflow: hidden;
+    }
+}
+
 
 @media (max-width: 1024px) {
     #sidebar-container {
@@ -451,8 +479,28 @@ body.is-dashboard #view-dashboard {
     }
     .view-section {
         padding: 1rem;
+        padding-bottom: 5rem; /* Space for footer/bottom of page */
+    }
+    
+    /* Ensure panels stack nicely and take full width */
+    .veldex-panel {
+        width: 100%;
+        margin-bottom: 1rem;
+    }
+
+    /* Table responsiveness wrapper */
+    .results-container, .overflow-x-auto {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Prevent text overflow in small cells */
+    .veldex-table th, .veldex-table td {
+        white-space: nowrap;
+        padding: 0.75rem 0.5rem;
     }
 }
+
 
 /* --- INVENTORY & OCR READABILITY SCOPES --- */
 #view-inventory .veldex-input,
@@ -482,3 +530,219 @@ body.is-dashboard #view-dashboard {
 .ocr-mat-row:hover {
     background: rgba(0, 224, 255, 0.05);
 }
+/* --- MOBILE OPTIMIZATIONS (768px) --- */
+@media (max-width: 768px) {
+    /* Global Layout */
+    .view-section {
+        padding: 0.75rem;
+        padding-bottom: 4rem;
+    }
+
+    /* Typography */
+    .text-4xl { font-size: 1.75rem !important; }
+    .text-3xl { font-size: 1.5rem !important; }
+    .text-2xl { font-size: 1.25rem !important; }
+    
+    .veldex-title-page {
+        font-size: 1.25rem;
+        letter-spacing: 0.15em;
+    }
+
+    /* Panels & Cards */
+    .veldex-panel {
+        padding: 1rem !important;
+        margin-bottom: 0.75rem;
+    }
+
+    /* Buttons */
+    .veldex-btn {
+        width: 100% !important;
+        min-height: 44px;
+        padding: 0.75rem 1rem;
+        font-size: 14px;
+    }
+
+    /* Inputs & Selects */
+    .veldex-input, .veldex-select {
+        width: 100% !important;
+        height: 44px;
+        padding: 0.6rem 1rem;
+        font-size: 16px; /* Prevents iOS zoom on focus */
+    }
+
+    /* Grids & Spacing */
+    .grid {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+    }
+
+    .space-y-8 > * + * { margin-top: 1.5rem !important; }
+    .space-y-6 > * + * { margin-top: 1rem !important; }
+    .gap-8 { gap: 1rem !important; }
+    .gap-6 { gap: 0.75rem !important; }
+
+    /* Form specific */
+    label {
+        font-size: 11px !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Table Adjustments */
+    .veldex-table th, .veldex-table td {
+        font-size: 13px;
+        padding: 0.6rem 0.5rem;
+    }
+
+    /* Inventory Items List */
+    #uex-items-list li {
+        padding: 0.75rem !important;
+    }
+}
+/* --- UX IMPROVEMENTS: STICKY ACTIONS & TOASTS --- */
+
+/* Button Interaction Feedback */
+button {
+    transition: transform 0.1s ease, filter 0.2s ease !important;
+}
+
+button:active:not(:disabled) {
+    transform: scale(0.97) !important;
+}
+
+button:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+/* Toast Notifications */
+.toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #101820;
+    color: var(--accent);
+    padding: 12px 20px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    font-size: 14px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    z-index: 9999;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 224, 255, 0.1);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.toast-error {
+    color: var(--danger) !important;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.toast-success {
+    color: var(--success) !important;
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+/* Sticky Action Wrapper (Mobile Only) */
+@media (max-width: 768px) {
+    .view-section {
+        padding-bottom: 120px !important; /* Extra padding for sticky button */
+    }
+
+    .container-action-mobile {
+        position: sticky;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: rgba(11, 15, 20, 0.98);
+        backdrop-blur: 12px;
+        padding: 12px;
+        border-top: 1px solid var(--line);
+        z-index: 100; /* Lower than dropdowns */
+        margin-left: -1rem;
+        margin-right: -1rem;
+        width: calc(100% + 2rem);
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
+        transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    .container-action-mobile.is-hidden {
+        transform: translateY(100%);
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .container-action-mobile .veldex-btn {
+        width: 100% !important;
+        height: 48px;
+    }
+
+    /* Dropdowns must be above sticky bar */
+    #location-autocomplete-list, 
+    #ocr-location-list,
+    .autocomplete-dropdown {
+        z-index: 300 !important;
+    }
+}
+
+/* Autocomplete UX Fixes */
+.autocomplete-dropdown {
+    max-height: 200px !important; /* ≈ 5 items visibles */
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    background: var(--panel) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 2px;
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.6);
+    scroll-behavior: smooth;
+}
+
+.autocomplete-dropdown::-webkit-scrollbar {
+    width: 6px;
+}
+
+.autocomplete-dropdown::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.autocomplete-dropdown::-webkit-scrollbar-thumb {
+    background: rgba(0, 224, 255, 0.2);
+    border-radius: 4px;
+}
+
+.autocomplete-dropdown::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 224, 255, 0.4);
+}
+
+.autocomplete-item,
+.ocr-loc-item {
+    height: 40px !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 12px !important;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border-bottom: 1px solid var(--line);
+}
+
+.autocomplete-item:last-child,
+.ocr-loc-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-item:hover,
+.ocr-loc-item:hover {
+    background: rgba(0, 224, 255, 0.1) !important;
+    padding-left: 1.5rem !important;
+}
+

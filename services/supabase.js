@@ -1,6 +1,15 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-const SUPABASE_URL = "https://heoehyhdjawsoffgkdym.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_L1o2o2uB9PK_CTkkdk812w_UI5JspYz";
+if (
+  !window.VELDEX_ENV ||
+  !window.VELDEX_ENV.SUPABASE_URL ||
+  !window.VELDEX_ENV.SUPABASE_ANON_KEY
+) {
+  throw new Error("Missing Supabase configuration. Check env files.");
+}
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabase = createClient(
+  window.VELDEX_ENV.SUPABASE_URL,
+  window.VELDEX_ENV.SUPABASE_ANON_KEY
+);
+

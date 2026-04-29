@@ -51,6 +51,10 @@
     <!-- Main Content Area -->
     <main class="main-content flex-1">
       <div id="header-container" class="shrink-0"></div>
+      
+      <!-- Mobile Navigation (Visible only on mobile) -->
+      <div id="mobile-nav-container" class="lg:hidden flex items-center justify-around bg-panel/80 backdrop-blur-md border-b border-line p-2 sticky top-[84px] z-30"></div>
+
 
       <!-- DASHBOARD VIEW -->
       <section id="view-dashboard" class="view-section h-full overflow-hidden">
@@ -298,13 +302,13 @@
                   <input id="ocr-location-input" type="text" placeholder="Rechercher une station..." autocomplete="off"
                     class="veldex-input w-full h-12" />
                   <div id="ocr-location-list"
-                    class="hidden absolute z-50 left-0 right-0 top-full mt-1 rounded-sm bg-panel border border-line shadow-2xl max-h-64 overflow-y-auto veldex-scroll">
+                    class="hidden absolute z-50 left-0 right-0 top-full mt-1 rounded-sm bg-panel border border-line shadow-2xl autocomplete-dropdown overflow-y-auto veldex-scroll">
                   </div>
                 </div>
               </div>
 
               <!-- Action Buttons -->
-              <div class="flex gap-3">
+              <div class="flex gap-3 container-action-mobile">
                 <button id="ocr-import-btn" type="button" class="veldex-btn-secondary flex-1 h-11">
                   📁 IMPORTER
                 </button>
@@ -350,9 +354,11 @@
                   <div id="ocr-matches-list" class="space-y-1.5"></div>
                 </div>
 
-                <button id="ocr-apply-form-btn" type="button" class="veldex-btn-primary w-full h-12 text-sm">
-                  ✅ SYNC TO SYSTEM
-                </button>
+                <div class="container-action-mobile">
+                  <button id="ocr-apply-form-btn" type="button" class="veldex-btn-primary w-full h-12 text-sm">
+                    ✅ SYNC TO SYSTEM
+                  </button>
+                </div>
               </div>
 
               <!-- Empty state -->
@@ -429,13 +435,20 @@
 
       <!-- CORPORATION -->
       <section id="view-corporation" class="view-section hidden space-y-8">
-        <div class="mb-6">
-          <h2 id="corp-page-title" class="text-4xl font-display font-bold text-white uppercase tracking-widest flex items-center gap-4">
-            <span class="w-3 h-10 bg-accent"></span>
-            Aucune corporation
-          </h2>
-          <p class="text-[12px] font-display font-bold text-muted uppercase tracking-widest mt-2 ml-7">Registry & Personnel Management</p>
+        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 id="corp-page-title" class="text-4xl font-display font-bold text-white uppercase tracking-widest flex items-center gap-4">
+              <span class="w-3 h-10 bg-accent"></span>
+              Aucune corporation
+            </h2>
+            <p class="text-[12px] font-display font-bold text-muted uppercase tracking-widest mt-2 ml-7">Registry & Personnel Management</p>
+          </div>
+          <button id="create-corp-btn" class="veldex-btn-primary h-12 px-6">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            CRÉER UNE CORPORATION
+          </button>
         </div>
+
 
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
           <!-- Members (Left/Main) -->
@@ -479,7 +492,7 @@
               <div class="space-y-6">
                 <div>
                   <label class="text-[10px] font-display font-semibold text-muted uppercase tracking-widest block mb-2">Inviter un nouveau citoyen</label>
-                  <div class="flex flex-col gap-3">
+                  <div class="flex flex-col gap-3 container-action-mobile">
                     <input id="invite-username" type="text" placeholder="Username RSI" class="veldex-input w-full" />
                     <button id="invite-btn" class="veldex-btn-primary w-full h-11">
                       ENVOYER L'INVITATION
@@ -518,7 +531,10 @@
 
   <!-- Tesseract.js OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="./config/env.production.js"></script>
+  <script src="./config/env.js"></script>
   <script type="module" src="./scripts/app.js"></script>
+
   <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
 </body>
 
