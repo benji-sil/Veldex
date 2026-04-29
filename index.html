@@ -1,10 +1,17 @@
 <!DOCTYPE html>
 <html lang="fr" class="dark">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VELDEX</title>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="styles/veldex-system.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -12,14 +19,21 @@
       theme: {
         extend: {
           colors: {
-            bg: "#0b0f14",
-            panel: "#121821",
-            panel2: "#18202b",
-            line: "#273244",
-            text: "#e5edf7",
-            muted: "#8ea0b8",
-            accent: "#22d3ee",
-            accent2: "#f59e0b"
+            bg: "#0B0F14",
+            panel: "#12171E",
+            panel2: "#181E26",
+            line: "rgba(0, 224, 255, 0.1)",
+            text: "#E2E8F0",
+            muted: "#64748B",
+            accent: "#00E0FF",
+            accent2: "#FF8A00"
+          },
+          fontFamily: {
+            sans: ['Manrope', 'sans-serif'],
+            display: ['Rajdhani', 'sans-serif'],
+          },
+          borderRadius: {
+            'sm': '2px',
           }
         }
       }
@@ -27,235 +41,385 @@
   </script>
 </head>
 
-<body id="dashboard-page" class="bg-bg text-text min-h-screen">
-  <div class="flex min-h-screen">
+<body id="dashboard-page" class="bg-bg text-text min-h-screen overflow-x-hidden">
+  <div class="flex min-h-screen relative">
     <!-- Sidebar -->
-    <aside class="w-64 bg-panel border-r border-line p-4 hidden md:flex md:flex-col">
-      <div class="mb-8">
-        <h1 class="text-2xl font-bold text-accent">VELDEX</h1>
-        <p class="text-sm text-muted">Corp Mining Tool</p>
-      </div>
-
-      <nav class="space-y-2">
-        <button data-view="view-dashboard" class="nav-btn w-full text-left px-3 py-2 rounded bg-panel2 hover:bg-line">Dashboard</button>
-        <button data-view="view-add" class="nav-btn w-full text-left px-3 py-2 rounded hover:bg-line">Ajouter minerai</button>
-        <button data-view="view-my" class="nav-btn w-full text-left px-3 py-2 rounded hover:bg-line">Mon registre</button>
-        <button data-view="view-corp" class="nav-btn w-full text-left px-3 py-2 rounded hover:bg-line">Corporation</button>
-        <button data-view="view-invitations" class="nav-btn w-full text-left px-3 py-2 rounded hover:bg-line">Invitations</button>
-        <button data-view="view-profile" class="nav-btn w-full text-left px-3 py-2 rounded hover:bg-line">Profil</button>
-      </nav>
-
-      <div class="mt-auto pt-6">
-        <button id="logout-btn" class="w-full px-3 py-2 rounded bg-red-600 hover:bg-red-500 text-white">
-          Logout
-        </button>
-      </div>
+    <aside id="sidebar-container" class="p-4">
+      <!-- Injected via sidebar.js -->
     </aside>
 
-    <!-- Main -->
-    <main class="flex-1 p-4 md:p-6 space-y-6">
-      <!-- Mobile quick nav -->
-      <div class="md:hidden grid grid-cols-2 gap-2">
-        <button data-view="view-dashboard" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Dashboard</button>
-        <button data-view="view-add" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Ajouter</button>
-        <button data-view="view-my" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Mon registre</button>
-        <button data-view="view-corp" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Corporation</button>
-        <button data-view="view-invitations" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Invitations</button>
-        <button data-view="view-profile" class="nav-btn px-3 py-2 rounded bg-panel border border-line">Profil</button>
-      </div>
+    <!-- Main Content Area -->
+    <main class="main-content flex-1">
+      <div id="header-container" class="shrink-0"></div>
 
-      <!-- DASHBOARD -->
-      <section id="view-dashboard" class="view-section space-y-6">
-        <div>
-          <h2 class="text-2xl font-bold">Dashboard</h2>
-          <p class="text-muted">Vue globale de la corporation</p>
-        </div>
+      <!-- DASHBOARD VIEW -->
+      <section id="view-dashboard" class="view-section h-full overflow-hidden">
+        <div class="flex flex-col lg:flex-row gap-6 h-full min-h-0">
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="bg-panel border border-line rounded-xl p-4">
-            <p class="text-sm text-muted">Total SCU</p>
-            <p id="stat-total-scu" class="text-3xl font-bold">0.00</p>
-          </div>
+          <!-- LEFT COLUMN (PRIMARY - 70%) -->
+          <div class="lg:w-[70%] flex flex-col gap-6 min-h-0">
 
-          <div class="bg-panel border border-line rounded-xl p-4">
-            <p class="text-sm text-muted">Total UNIT</p>
-            <p id="stat-total-unit" class="text-3xl font-bold">0</p>
-          </div>
-        </div>
+            <!-- PANEL 1: SCANNER INTERFACE -->
+            <div class="veldex-panel p-6 overflow-hidden shrink-0">
+              <div class="scanline-container"><div class="scanline"></div></div>
+              <div class="flex items-center justify-between mb-4 border-b border-line pb-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-1.5 h-1.5 bg-accent rounded-full animate-veldex-pulse shadow-[0_0_10px_#00E0FF]"></div>
+                  <h3 class="text-sm font-display font-bold uppercase tracking-[0.2em] text-white/90">Scanner Interface</h3>
+                </div>
+                <span class="text-[8px] font-sans font-black text-accent/40 uppercase tracking-[0.2em] bg-accent/5 px-2 py-0.5 rounded-sm border border-accent/10">Active Terminal</span>
+              </div>
 
-        <div class="bg-panel border border-line rounded-xl p-4">
-          <label for="mineral-search" class="block text-sm text-muted mb-2">Rechercher un minerai</label>
-          <input
-            id="mineral-search"
-            type="text"
-            placeholder="Ex : Gold, Hadanite, Bexalite..."
-            class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
-          />
+              <!-- DASHBOARD SEARCH ZONE -->
+              <div class="space-y-4">
+                <div class="mb-4">
+                  <input id="dash-filter-uex-name" type="text" 
+                    placeholder="Search an item, location, player..."
+                    class="veldex-input w-full px-4 py-4 text-lg font-sans placeholder:text-muted/20" />
+                </div>
 
-          <div class="mt-6">
-            <h3 class="text-lg font-semibold mb-3">Top 3 résultats</h3>
-            <div id="search-top-results" class="space-y-2">
-              <p class="text-muted">Tape un minerai pour voir les 3 meilleurs.</p>
+                <!-- Filters Grid (Compact) -->
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] font-display font-bold text-accent/60 uppercase tracking-[0.1em] px-1">Location</label>
+                    <select id="dash-filter-uex-location" class="veldex-select h-10">
+                      <option value="">All Locations</option>
+                    </select>
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] font-display font-bold text-accent/60 uppercase tracking-[0.1em] px-1">Category</label>
+                    <select id="dash-filter-uex-category" class="veldex-select h-10">
+                      <option value="">All Categories</option>
+                    </select>
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] font-display font-bold text-accent/60 uppercase tracking-[0.1em] px-1">Size</label>
+                    <select id="dash-filter-uex-size" class="veldex-select h-10">
+                      <option value="">All Sizes</option>
+                    </select>
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] font-display font-bold text-accent/60 uppercase tracking-[0.1em] px-1">Class / Q</label>
+                    <select id="dash-filter-uex-class" class="veldex-select h-10">
+                      <option value="">All Classes</option>
+                    </select>
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] font-display font-bold text-accent/60 uppercase tracking-[0.1em] px-1">Grade</label>
+                    <select id="dash-filter-uex-grade" class="veldex-select h-10">
+                      <option value="">All Grades</option>
+                    </select>
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] font-display font-bold text-accent/60 uppercase tracking-[0.1em] px-1">Operator</label>
+                    <select id="dash-filter-uex-player" class="veldex-select h-10">
+                      <option value="">All Operators</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            <!-- PANEL 2: RESULTS -->
+            <div class="veldex-panel flex-1 flex flex-col p-6 overflow-hidden min-h-0">
+              <div class="scanline-container"><div class="scanline"></div></div>
+              <div class="flex items-center justify-between mb-4 shrink-0">
+                <div class="flex items-center gap-4">
+                  <h3 class="text-sm font-display font-bold uppercase tracking-[0.2em] text-white/90">Extraction Results</h3>
+                  <div class="h-px w-12 bg-line"></div>
+                  <div class="flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 bg-accent rounded-full animate-veldex-pulse"></span>
+                    <span class="text-[8px] font-sans font-black text-accent/60 uppercase tracking-[0.2em]">STATUS: NOMINAL</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Table Container with Fixed Height and Scroll -->
+              <div class="results-container veldex-scroll pr-2">
+                <table class="w-full text-left text-sm border-collapse">
+                  <thead class="sticky top-0 bg-panel z-10">
+                    <tr class="border-b border-line">
+                      <th class="py-3 px-4 text-[12px] font-display font-bold text-muted/80 uppercase tracking-[0.1em]">Item Name</th>
+                      <th class="py-3 px-4 text-[12px] font-display font-bold text-muted/80 uppercase tracking-[0.1em]">Category</th>
+                      <th class="py-3 px-4 text-[12px] font-display font-bold text-muted/80 uppercase tracking-[0.1em] text-center">Size</th>
+                      <th class="py-3 px-4 text-[12px] font-display font-bold text-muted/80 uppercase tracking-[0.1em] text-center">Class / Q</th>
+                      <th class="py-3 px-4 text-[12px] font-display font-bold text-muted/80 uppercase tracking-[0.1em] text-center">Grade</th>
+                      <th class="py-3 px-4 text-[12px] font-display font-bold text-muted/80 uppercase tracking-[0.1em] text-right">Stock</th>
+                      <th class="py-3 px-4 text-[12px] font-display font-bold text-muted/80 uppercase tracking-[0.1em]">Location</th>
+                      <th class="py-3 px-4 text-[12px] font-display font-bold text-accent2/80 uppercase tracking-[0.1em] text-right">Operator</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dash-uex-storage-body" class="divide-y divide-line/30">
+                    <!-- Data injected -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
           </div>
 
-          <div class="mt-6">
-            <h3 class="text-lg font-semibold mb-3">Total par minerai</h3>
-            <div id="totals-by-mineral" class="space-y-1"></div>
+          <!-- RIGHT COLUMN (SECONDARY - 30%) -->
+          <div class="lg:w-[30%] flex flex-col gap-6 min-h-0">
+
+            <!-- PANEL: LOGISTICS HUBS -->
+            <div class="veldex-panel p-6 overflow-hidden flex flex-col min-h-0">
+              <div class="scanline-container"><div class="scanline"></div></div>
+              <div class="flex items-center justify-between mb-4 border-b border-line pb-3 shrink-0">
+                <div class="flex items-center gap-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accent animate-veldex-flicker"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                  <h3 class="text-xs font-display font-black text-white uppercase tracking-[0.2em]">Logistics Hubs</h3>
+                </div>
+                <div class="w-1 h-1 bg-accent rounded-full animate-veldex-pulse"></div>
+              </div>
+              <div id="dash-top-stations" class="space-y-3 flex-1 overflow-y-auto veldex-scroll pr-1">
+                <!-- Data injected -->
+              </div>
+            </div>
+
+            <!-- PANEL: RECENT ACTIVITY -->
+            <div class="veldex-panel p-6 overflow-hidden flex flex-col min-h-0">
+              <div class="scanline-container"><div class="scanline"></div></div>
+              <div class="flex items-center justify-between mb-4 border-b border-line pb-3 shrink-0">
+                <div class="flex items-center gap-3">
+                  <div class="w-1.5 h-1.5 bg-accent2 rounded-full shadow-[0_0_8px_#FF8A00] animate-veldex-pulse"></div>
+                  <h3 class="text-xs font-display font-black text-white uppercase tracking-[0.2em]">Recent Activity</h3>
+                </div>
+                <span class="text-[7px] font-sans font-black text-accent2/40 uppercase tracking-[0.2em]">Live Feed</span>
+              </div>
+              <div id="dash-last-entries" class="space-y-3 flex-1 overflow-y-auto veldex-scroll pr-1">
+                <!-- Data injected -->
+              </div>
+            </div>
+
           </div>
 
-          <div class="mt-6">
-            <h3 class="text-lg font-semibold mb-3">Dernières entrées</h3>
-            <div id="recent-entries" class="space-y-1"></div>
-          </div>
         </div>
       </section>
 
-      <!-- AJOUTER -->
-      <section id="view-add" class="view-section hidden space-y-6">
-        <div>
-          <h2 class="text-2xl font-bold">Ajouter minerai</h2>
-          <p class="text-muted">Ajouter une nouvelle entrée</p>
-        </div>
 
-        <section class="bg-panel border border-line rounded-xl p-6">
-          <form id="add-entry-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label for="mineral_name" class="block text-sm text-muted mb-1">Minerai</label>
-              <select
-                id="mineral_name"
-                name="mineral_name"
-                class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
-                required
-              >
-                <option value="">Choisir un minerai</option>
+      <!-- INVENTORY -->
+      <section id="view-inventory" class="view-section hidden space-y-8">
+        <!-- Ajouter à l'inventaire -->
+        <section class="veldex-panel p-6">
+          <div class="mb-6 border-b border-line pb-4">
+            <h3 class="text-2xl font-display font-bold uppercase tracking-widest text-white flex items-center gap-3">
+              <span class="w-2.5 h-8 bg-accent"></span>
+              Ajouter à l'inventaire
+            </h3>
+            <p class="text-[14px] text-muted font-sans mt-3">Recherchez un item, une ressource, une arme ou un composant Star Citizen dans la base de données UEX.</p>
+          </div>
 
-                <option value="Jacluium">Jacluium</option>
-                <option value="Carinite">Carinite</option>
-                <option value="Aphorite">Aphorite</option>
-                <option value="Glacosite">Glacosite</option>
-                <option value="Dolivine">Dolivine</option>
-                <option value="Beradom">Beradom</option>
-                <option value="Feynmaline">Feynmaline</option>
-                <option value="Hadanite">Hadanite</option>
-                <option value="Janalite">Janalite</option>
-                <option value="Saldynium">Saldynium</option>
+          <div class="mb-6">
+            <input id="search-uex-item" type="text"
+              placeholder="Rechercher un item, une ressource, une arme, un composant..."
+              class="veldex-input w-full" />
+          </div>
 
-                <option value="Agricium">Agricium</option>
-                <option value="Aluminium">Aluminium</option>
-                <option value="Aslarite">Aslarite</option>
-                <option value="Beryl">Beryl</option>
-                <option value="Bexalite">Bexalite</option>
-                <option value="Borase">Borase</option>
-                <option value="Copper">Copper</option>
-                <option value="Corundum">Corundum</option>
-                <option value="Gold">Gold</option>
-                <option value="Hephaestanite">Hephaestanite</option>
-                <option value="Ice">Ice</option>
-                <option value="Iron">Iron</option>
-                <option value="Laranite">Laranite</option>
-                <option value="Lindinium">Lindinium</option>
-                <option value="Quartz">Quartz</option>
-                <option value="Quantainium">Quantainium</option>
-                <option value="Riccite">Riccite</option>
-                <option value="Sadaryx">Sadaryx</option>
-                <option value="Savrilum">Savrilum</option>
-                <option value="Silicon">Silicon</option>
-                <option value="Stileron">Stileron</option>
-                <option value="Taranite">Taranite</option>
-                <option value="Tin">Tin</option>
-                <option value="Titanium">Titanium</option>
-                <option value="Torite">Torite</option>
-                <option value="Tungsten">Tungsten</option>
-              </select>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Liste des items -->
+            <div class="bg-bg/50 border border-line rounded-sm p-2 relative min-h-[300px]">
+              <div id="uex-loading"
+                class="hidden absolute inset-0 bg-bg/90 backdrop-blur-sm flex flex-col items-center justify-center text-sm text-accent font-medium z-10 gap-2">
+                <div class="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+                SYSTEM SCANNING...
+              </div>
+              <ul id="uex-items-list" class="space-y-1 veldex-scroll max-h-[400px] overflow-y-auto pr-2">
+                <!-- Dynamically filled -->
+              </ul>
             </div>
 
-            <div>
-              <label for="unit_type" class="block text-sm text-muted mb-1">Unité</label>
-              <input
-                id="unit_type"
-                name="unit_type"
-                type="text"
-                readonly
-                placeholder="Automatique"
-                class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
-              />
+            <!-- Détails de l'item sélectionné -->
+            <div id="uex-item-details" class="bg-panel2/50 border border-line rounded-sm p-5 hidden">
+              <div id="dynamic-form-container" class="transition-opacity duration-300"></div>
             </div>
 
-            <div>
-              <label for="quantity" class="block text-sm text-muted mb-1">Quantité</label>
-              <input
-                id="quantity"
-                name="quantity"
-                type="number"
-                min="0"
-                step="0.01"
-                inputmode="decimal"
-                placeholder="Ex : 0.03"
-                class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
-                required
-              />
+            <!-- État vide -->
+            <div id="uex-empty-state"
+              class="border border-line border-dashed rounded-sm p-10 flex flex-col items-center justify-center text-center opacity-60">
+              <div class="w-12 h-12 rounded-full border border-line flex items-center justify-center mb-4 text-muted">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                  <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <p class="text-[14px] font-display font-bold text-muted uppercase tracking-widest mb-3">Aucun item sélectionné</p>
+              <p class="text-[13px] text-muted/80 font-sans max-w-[250px]">Sélectionnez un résultat de recherche pour préparer l'ajout à l'inventaire.</p>
             </div>
-
-            <div>
-              <label for="quality" class="block text-sm text-muted mb-1">Qualité</label>
-              <input
-                id="quality"
-                name="quality"
-                type="number"
-                min="0"
-                max="1000"
-                step="1"
-                placeholder="Ex : 84"
-                class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
-                required
-              />
-            </div>
-
-            <div class="md:col-span-2 flex items-center gap-3 pt-2">
-              <button
-                type="submit"
-                class="rounded-lg bg-accent hover:bg-cyan-400 px-4 py-2 text-black font-medium"
-              >
-                Ajouter
-              </button>
-              <p id="form-message" class="text-sm text-muted"></p>
-            </div>
-          </form>
+          </div>
         </section>
-      </section>
 
-      <!-- MON REGISTRE -->
-      <section id="view-my" class="view-section hidden space-y-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-2xl font-bold">Mon registre</h2>
-            <p class="text-muted">Mes entrées personnelles</p>
+        <!-- OCR Screenshot -->
+        <section class="veldex-panel p-6" id="ocr-section">
+          <div class="mb-6 border-b border-line pb-4">
+            <h3 class="text-2xl font-display font-bold uppercase tracking-widest text-white flex items-center gap-3">
+              <span class="w-2.5 h-8 bg-accent"></span>
+              OCR Scanner
+            </h3>
+            <p class="text-[14px] text-muted font-sans mt-3">Collez une capture d'écran ou importez une image pour pré-remplir l'inventaire via le système de reconnaissance.</p>
           </div>
-          <button
-            id="refresh-my-storage"
-            class="rounded-lg bg-panel border border-line hover:bg-panel2 px-3 py-2 text-sm"
-            type="button"
-          >
-            Rafraîchir
-          </button>
-        </div>
 
-        <section class="bg-panel border border-line rounded-xl p-6">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Left: Drop / Paste / Upload -->
+            <div class="space-y-6">
+              <!-- Drop zone -->
+              <div id="ocr-drop-zone" class="text-center p-8 border border-dashed border-line rounded-sm bg-bg/30 hover:bg-bg/50 transition-colors cursor-pointer group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor" stroke-width="1.5" class="mx-auto mb-3 text-muted group-hover:text-accent transition-colors">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <p class="text-[14px] text-muted font-sans uppercase tracking-widest">Glissez une image ici ou <kbd
+                    class="bg-panel2 border border-line px-2 py-1 rounded text-[12px] text-white mx-1 font-mono">Ctrl+V</kbd></p>
+              </div>
+
+              <!-- Preview -->
+              <div id="ocr-preview-wrapper" class="hidden rounded-sm overflow-hidden border border-line bg-bg">
+                <img id="ocr-preview" src="" alt="Preview OCR" class="w-full h-auto object-contain max-h-[300px]" />
+              </div>
+
+              <!-- OCR Settings Grid -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Visibility Toggle -->
+                <div class="space-y-2">
+                  <label class="text-[12px] font-display font-bold text-muted uppercase tracking-widest block">Visibilité</label>
+                  <div class="flex rounded-sm overflow-hidden border border-line h-10">
+                    <button id="ocr-vis-corp" type="button"
+                      class="flex-1 text-[12px] font-display font-bold uppercase tracking-wider transition-all bg-accent/10 text-accent border-r border-line"
+                      data-vis="corp">🏢 Corpo</button>
+                    <button id="ocr-vis-private" type="button"
+                      class="flex-1 text-[12px] font-display font-bold uppercase tracking-wider transition-all text-muted hover:text-white"
+                      data-vis="private">🔒 Privé</button>
+                  </div>
+                </div>
+
+                <!-- Location -->
+                <div class="space-y-2 relative">
+                  <label class="text-[13px] font-display font-semibold text-muted uppercase tracking-widest block">Localisation</label>
+                  <input id="ocr-location-input" type="text" placeholder="Rechercher une station..." autocomplete="off"
+                    class="veldex-input w-full h-12" />
+                  <div id="ocr-location-list"
+                    class="hidden absolute z-50 left-0 right-0 top-full mt-1 rounded-sm bg-panel border border-line shadow-2xl max-h-64 overflow-y-auto veldex-scroll">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="flex gap-3">
+                <button id="ocr-import-btn" type="button" class="veldex-btn-secondary flex-1 h-11">
+                  📁 IMPORTER
+                </button>
+                <button id="ocr-analyze-btn" type="button" class="veldex-btn-primary flex-1 h-11" disabled>
+                  🔍 ANALYSER
+                </button>
+              </div>
+              <input id="ocr-file-input" type="file" accept="image/*" class="hidden" />
+
+              <!-- Progress -->
+              <div id="ocr-progress-wrapper" class="hidden space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-[12px] text-accent font-display font-bold uppercase tracking-widest animate-pulse">Scanning in progress...</span>
+                  <span id="ocr-progress-pct" class="text-[12px] text-accent font-mono font-bold">0%</span>
+                </div>
+                <div class="w-full bg-line/20 rounded-full h-1 overflow-hidden">
+                  <div id="ocr-progress-bar" class="bg-accent h-full shadow-[0_0_10px_rgba(0,224,255,0.5)] transition-all duration-300" style="width:0%"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Results -->
+            <div class="space-y-4">
+              <!-- Raw OCR text -->
+              <div id="ocr-raw-wrapper" class="hidden space-y-2">
+                <div class="flex items-center justify-between">
+                  <label class="text-[12px] font-display font-semibold text-muted uppercase tracking-widest">RAW SYSTEM DATA</label>
+                  <button id="ocr-raw-toggle" type="button" class="text-[12px] text-accent hover:underline uppercase font-bold">HIDE ▲</button>
+                </div>
+                <div id="ocr-raw-body">
+                  <textarea id="ocr-raw-text" readonly
+                    class="veldex-input w-full font-mono text-[12px] leading-relaxed opacity-70" rows="6"></textarea>
+                </div>
+              </div>
+
+              <!-- Parsed result -->
+              <div id="ocr-parsed-wrapper" class="hidden space-y-3">
+                <label class="text-[12px] font-display font-bold text-muted uppercase tracking-widest">PROCESSOR OUTPUT</label>
+                <div class="bg-accent/5 border border-accent/20 rounded-sm p-4" id="ocr-parsed-display"></div>
+
+                <div id="ocr-matches-wrapper" class="hidden space-y-2">
+                <label class="text-[13px] font-display font-bold text-muted uppercase tracking-widest">CANDIDATES FOUND</label>
+                  <div id="ocr-matches-list" class="space-y-1.5"></div>
+                </div>
+
+                <button id="ocr-apply-form-btn" type="button" class="veldex-btn-primary w-full h-12 text-sm">
+                  ✅ SYNC TO SYSTEM
+                </button>
+              </div>
+
+              <!-- Empty state -->
+              <div id="ocr-result-empty" class="flex flex-col items-center justify-center py-16 text-center opacity-30">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor" stroke-width="1">
+                  <path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <p class="text-sm font-display font-bold uppercase tracking-widest mt-4">NO ACTIVE SCAN</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Inventaire Table -->
+        <section class="veldex-panel p-6">
+          <div class="flex items-center justify-between mb-6 border-b border-line pb-4">
+            <h3 class="text-xl font-display font-bold uppercase tracking-widest text-white flex items-center gap-3">
+              <span class="w-2 h-6 bg-accent"></span>
+              INVENTAIRE PERSONNEL
+            </h3>
+            <button id="refresh-uex-storage" class="veldex-btn-secondary px-4 h-9 text-[12px]" type="button">
+              REFRESH SYSTEM
+            </button>
+          </div>
+
+          <!-- Filtres UEX -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+            <div class="lg:col-span-2">
+              <input id="filter-uex-name" type="text" placeholder="Filtrer par nom..." class="veldex-input w-full" />
+            </div>
+            <select id="filter-uex-location" class="veldex-select">
+              <option value="">Locations</option>
+            </select>
+            <select id="filter-uex-category" class="veldex-select">
+              <option value="">Catégories</option>
+            </select>
+            <select id="filter-uex-size" class="veldex-select">
+              <option value="">Toutes Tailles</option>
+            </select>
+            <select id="filter-uex-visibility" class="veldex-select">
+              <option value="">Visibilités</option>
+              <option value="corp">🏢 Corpo</option>
+              <option value="private">🔒 Privé</option>
+            </select>
+            <button id="more-filters-btn" class="veldex-btn-ghost h-10 lg:hidden">PLUS DE FILTRES</button>
+          </div>
+
+          <!-- Table Container -->
+          <div class="overflow-x-auto veldex-scroll border border-line rounded-sm">
+            <table class="veldex-table">
               <thead>
-                <tr class="border-b border-line text-muted">
-                  <th class="py-3 pr-4">Minerai</th>
-                  <th class="py-3 pr-4">Quantité</th>
-                  <th class="py-3 pr-4">Unité</th>
-                  <th class="py-3 pr-4">Qualité</th>
-                  <th class="py-3 pr-4">Actions</th>
+                <tr>
+                  <th class="w-1/4">DÉSIGNATION</th>
+                  <th>CATÉGORIE</th>
+                  <th>S / C / G</th>
+                  <th>QUANTITÉ</th>
+                  <th>LOCALISATION</th>
+                  <th>ACCÈS</th>
+                  <th class="text-right">ACTIONS</th>
                 </tr>
               </thead>
-              <tbody id="my-storage-body">
+              <tbody id="uex-storage-body">
                 <tr>
-                  <td colspan="5" class="py-4 text-muted">Aucune donnée chargée.</td>
+                  <td colspan="7" class="py-12 text-center text-muted font-display uppercase tracking-widest opacity-50">
+                    Initializing data streams...
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -264,208 +428,98 @@
       </section>
 
       <!-- CORPORATION -->
-<section id="view-corp" class="view-section hidden space-y-6">
-  <div>
-    <h2 class="text-2xl font-bold">Corporation</h2>
-    <p class="text-muted">Informations et stockage global</p>
-  </div>
-
-  <section class="bg-panel border border-line rounded-xl p-6">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
-        <p class="text-sm text-muted mb-1">Nom de corporation</p>
-        <p id="corp-display-name" class="text-xl font-bold">NO CORPORATION</p>
-      </div>
-
-      <div>
-        <p class="text-sm text-muted mb-1">Rôle</p>
-        <p id="corp-role-badge" class="text-lg font-semibold text-accent2">RANK: NONE</p>
-      </div>
-
-      <div>
-        <p class="text-sm text-muted mb-1">Référence</p>
-        <p id="corp-ref">REF: N/A</p>
-      </div>
-
-      <div>
-        <p class="text-sm text-muted mb-1">Opérations</p>
-        <p id="corp-operations">IDLE</p>
-      </div>
-
-      <div>
-        <p class="text-sm text-muted mb-1">Membres</p>
-        <p id="corp-members-count">0</p>
-      </div>
-
-      <div>
-        <p class="text-sm text-muted mb-1">Invitations</p>
-        <p id="corp-pending-count">0</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- STOCKAGE CORPORATION -->
-  <section class="bg-panel border border-line rounded-xl p-6">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-xl font-semibold">Stockage corporation</h3>
-      <button
-        id="refresh-corp-storage"
-        class="rounded-lg bg-panel2 hover:bg-line px-3 py-2 text-sm"
-        type="button"
-      >
-        Rafraîchir
-      </button>
-    </div>
-
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm">
-        <thead>
-          <tr class="border-b border-line text-muted">
-            <th class="py-3 pr-4">Minerai</th>
-            <th class="py-3 pr-4">Quantité</th>
-            <th class="py-3 pr-4">Unité</th>
-            <th class="py-3 pr-4">Qualité</th>
-            <th class="py-3 pr-4">Ajouté par</th>
-          </tr>
-        </thead>
-        <tbody id="corp-storage-body">
-          <tr>
-            <td colspan="5" class="py-4 text-muted">Aucune donnée chargée.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- MEMBRES DE LA CORPORATION -->
-  <section class="bg-panel border border-line rounded-xl p-6">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-xl font-semibold">Membres de la corporation</h3>
-      <button
-        id="refresh-members"
-        class="rounded-lg bg-panel2 hover:bg-line px-3 py-2 text-sm"
-        type="button"
-      >
-        Rafraîchir
-      </button>
-    </div>
-
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm">
-        <thead>
-          <tr class="border-b border-line text-muted">
-            <th class="py-3 pr-4">Username</th>
-            <th class="py-3 pr-4">Rôle</th>
-            <th class="py-3 pr-4">Action</th>
-          </tr>
-        </thead>
-        <tbody id="corp-members-body">
-          <tr>
-            <td colspan="3" class="py-4 text-muted">Aucune donnée chargée.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-  
-  <section class="bg-panel border border-line rounded-xl p-6">
-    <h3 class="text-xl font-semibold mb-4">Créer une corporation</h3>
-    <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
-      <input
-        id="corp-name"
-        type="text"
-        placeholder="Nom de la corporation"
-        class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
-      />
-      <button
-        id="create-corp-btn"
-        class="rounded-lg bg-accent2 hover:bg-amber-400 px-4 py-2 text-black font-medium"
-        type="button"
-      >
-        Créer
-      </button>
-    </div>
-    <p id="corp-status" class="mt-3 text-sm text-muted"></p>
-  </section>
-</section>
-
-      <!-- INVITATIONS -->
-      <section id="view-invitations" class="view-section hidden space-y-6">
-        <div>
-          <h2 class="text-2xl font-bold">Invitations</h2>
-          <p class="text-muted">Inviter et gérer les invitations</p>
+      <section id="view-corporation" class="view-section hidden space-y-8">
+        <div class="mb-6">
+          <h2 id="corp-page-title" class="text-4xl font-display font-bold text-white uppercase tracking-widest flex items-center gap-4">
+            <span class="w-3 h-10 bg-accent"></span>
+            Aucune corporation
+          </h2>
+          <p class="text-[12px] font-display font-bold text-muted uppercase tracking-widest mt-2 ml-7">Registry & Personnel Management</p>
         </div>
 
-        <section class="bg-panel border border-line rounded-xl p-6">
-          <h3 class="text-xl font-semibold mb-4">Inviter un joueur</h3>
-          <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
-            <input
-              id="invite-username"
-              type="text"
-              placeholder="Username du joueur"
-              class="w-full rounded-lg bg-panel2 border border-line px-3 py-2 text-white"
-            />
-            <button
-              id="invite-btn"
-              class="rounded-lg bg-accent hover:bg-cyan-400 px-4 py-2 text-black font-medium"
-              type="button"
-            >
-              Inviter
-            </button>
-          </div>
-          <p id="invite-status" class="mt-3 text-sm text-muted"></p>
-        </section>
-
-        <section class="bg-panel border border-line rounded-xl p-6">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-xl font-semibold">Invitations reçues</h3>
-            <div class="flex items-center gap-3">
-              <span id="pending-invitations-badge" class="text-sm text-accent">0 PENDING</span>
-              <button
-                id="refresh-invitations-btn"
-                class="rounded-lg bg-panel2 hover:bg-line px-3 py-2 text-sm"
-                type="button"
-              >
-                Rafraîchir
-              </button>
-            </div>
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          <!-- Members (Left/Main) -->
+          <div class="xl:col-span-2 space-y-6">
+            <section class="veldex-panel p-6">
+              <div class="flex items-center justify-between mb-6 border-b border-line pb-4">
+                <h3 class="text-xl font-display font-bold uppercase tracking-widest text-white">Effectif Corpo</h3>
+                <button id="refresh-members" class="veldex-btn-secondary px-4 h-9 text-[10px]" type="button">
+                  UPDATE DATABASE
+                </button>
+              </div>
+              
+              <div class="overflow-x-auto veldex-scroll border border-line rounded-sm">
+                <table class="veldex-table">
+                  <thead>
+                    <tr>
+                      <th>USERNAME</th>
+                      <th>RÔLE SYSTÈME</th>
+                      <th class="text-right">ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="corp-members-body">
+                    <tr>
+                      <td colspan="3" class="py-12 text-center text-muted font-display uppercase tracking-widest opacity-50">
+                        Loading personnel files...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
 
-          <div id="invitations-list" class="space-y-3">
-            <div class="text-sm text-muted">No pending invitations.</div>
+          <!-- Invitations & Actions (Right/Sidebar) -->
+          <div class="space-y-6">
+            <section class="veldex-panel p-6">
+              <h3 class="text-lg font-display font-bold uppercase tracking-widest text-white mb-6 border-b border-line pb-4">
+                Recrutement
+              </h3>
+
+              <div class="space-y-6">
+                <div>
+                  <label class="text-[10px] font-display font-semibold text-muted uppercase tracking-widest block mb-2">Inviter un nouveau citoyen</label>
+                  <div class="flex flex-col gap-3">
+                    <input id="invite-username" type="text" placeholder="Username RSI" class="veldex-input w-full" />
+                    <button id="invite-btn" class="veldex-btn-primary w-full h-11">
+                      ENVOYER L'INVITATION
+                    </button>
+                  </div>
+                  <p id="invite-status" class="mt-3 text-[10px] text-muted font-sans italic"></p>
+                </div>
+
+                <div class="pt-6 border-t border-line">
+                  <div class="flex items-center justify-between mb-4">
+                    <h4 class="text-xs font-display font-semibold text-muted uppercase tracking-widest">Requêtes en attente</h4>
+                    <span id="pending-invitations-badge" class="px-2 py-0.5 bg-accent/20 text-accent text-[10px] font-bold rounded-full tabular-nums">0</span>
+                  </div>
+                  
+                  <div id="invitations-list" class="space-y-3 min-h-[100px] flex flex-col justify-center">
+                    <div class="text-center py-4">
+                      <p class="text-[10px] text-muted uppercase tracking-widest opacity-50">No pending requests</p>
+                    </div>
+                  </div>
+
+                  <div class="mt-6 flex justify-between items-center">
+                    <button id="refresh-invitations-btn" class="text-[10px] text-accent hover:underline uppercase font-bold">
+                      RELOAD REQUESTS
+                    </button>
+                    <p id="invitations-status" class="text-[10px] text-muted font-sans italic"></p>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
-
-          <p id="invitations-status" class="mt-4 text-sm text-muted"></p>
-        </section>
-      </section>
-
-      <!-- PROFIL -->
-      <section id="view-profile" class="view-section hidden space-y-6">
-        <div>
-          <h2 class="text-2xl font-bold">Profil</h2>
-          <p class="text-muted">Informations du compte</p>
         </div>
-
-        <section class="bg-panel border border-line rounded-xl p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <p class="text-sm text-muted mb-1">Username</p>
-            <p id="user-display-name" class="text-lg font-bold">UNKNOWN</p>
-          </div>
-
-          <div>
-            <p class="text-sm text-muted mb-1">Corporation active</p>
-            <p id="user-linked-corp">NO ACTIVE CORPORATION</p>
-          </div>
-
-          <div>
-            <p class="text-sm text-muted mb-1">Clearance</p>
-            <p id="user-clearance" class="text-accent2">LEVEL 1 MEMBER</p>
-          </div>
-        </section>
       </section>
+
     </main>
   </div>
 
-  <script type="module" src="app.js"></script>
+  <!-- Tesseract.js OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script type="module" src="./scripts/app.js"></script>
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
 </body>
+
 </html>

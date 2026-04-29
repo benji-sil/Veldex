@@ -1,0 +1,484 @@
+/* VELDEX INDUSTRIAL INTELLIGENCE - DESIGN SYSTEM */
+
+:root {
+    --bg: #0B0F14;
+    --panel: #12171E;
+    --panel2: #181E26;
+    --line: rgba(0, 224, 255, 0.1);
+    --text: #E2E8F0;
+    --muted: #64748B;
+    --accent: #00E0FF;
+    --accent2: #FF8A00;
+    --danger: #EF4444;
+    --success: #10B981;
+    
+    --font-sans: 'Manrope', sans-serif;
+    --font-display: 'Rajdhani', sans-serif;
+    
+    --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --border-sm: 2px;
+    --line-height-base: 1.6;
+}
+
+/* Base Body Styles */
+body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: var(--line-height-base);
+    min-height: 100vh;
+}
+
+/* SCROLLBARS */
+.veldex-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 224, 255, 0.2) transparent;
+}
+.veldex-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+.veldex-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.veldex-scroll::-webkit-scrollbar-thumb {
+    background: rgba(0, 224, 255, 0.2);
+    border-radius: var(--border-sm);
+}
+.veldex-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 224, 255, 0.4);
+}
+
+/* ANIMATIONS */
+@keyframes veldex-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+@keyframes veldex-flicker {
+    0%, 100% { filter: brightness(1); }
+    33% { filter: brightness(1.1); }
+    66% { filter: brightness(0.95); }
+}
+@keyframes veldex-scanline {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100%); }
+}
+@keyframes veldex-fade-in {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes veldex-sweep {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+.animate-veldex-pulse { animation: veldex-pulse 3s infinite ease-in-out; }
+.animate-veldex-flicker { animation: veldex-flicker 4s infinite step-end; }
+
+/* PANEL SYSTEM */
+.veldex-panel {
+    background: linear-gradient(180deg, var(--panel) 0%, var(--bg) 100%);
+    border: 1px solid var(--line);
+    position: relative;
+    transition: var(--transition);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.02);
+    border-radius: var(--border-sm);
+}
+.veldex-panel:hover {
+    border-color: rgba(0, 224, 255, 0.2);
+    box-shadow: 0 0 30px rgba(0, 224, 255, 0.03), inset 0 1px 1px rgba(255, 255, 255, 0.03);
+}
+.veldex-panel::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 2px;
+    height: 100%;
+    background: var(--accent);
+    opacity: 0.3;
+    box-shadow: 0 0 10px rgba(0, 224, 255, 0.2);
+}
+
+.scanline-container {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0.03;
+}
+.scanline {
+    position: absolute;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(to right, transparent, var(--accent), transparent);
+    animation: veldex-scanline 8s linear infinite;
+}
+
+/* INPUTS & SELECTS */
+.veldex-input, .veldex-select {
+    width: 100%;
+    background: rgba(24, 30, 38, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1); /* Neutral border instead of cyan */
+    border-radius: var(--border-sm);
+    padding: 0.75rem 1rem;
+    color: white;
+    font-size: 15px;
+    font-weight: 500;
+    transition: var(--transition);
+    outline: none !important;
+    box-shadow: none;
+}
+.veldex-input:focus, .veldex-select:focus {
+    border-color: rgba(0, 224, 255, 0.5); /* Subtler cyan focus */
+    background: rgba(24, 30, 38, 0.9);
+    box-shadow: none; /* Removed the strong glow */
+    border-width: 1px;
+}
+.veldex-input::placeholder {
+    color: var(--muted);
+    opacity: 0.6;
+}
+
+/* BUTTONS */
+.veldex-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: var(--border-sm);
+    font-family: var(--font-display);
+    font-size: 13px; /* Increased from 12px */
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.veldex-btn-primary {
+    background: rgba(0, 224, 255, 0.1);
+    border: 1px solid rgba(0, 224, 255, 0.3);
+    color: var(--accent);
+}
+.veldex-btn-primary:hover:not(:disabled) {
+    background: rgba(0, 224, 255, 0.2);
+    border-color: var(--accent);
+    box-shadow: 0 0 15px rgba(0, 224, 255, 0.1);
+}
+
+.veldex-btn-secondary {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--line);
+    color: var(--muted);
+}
+.veldex-btn-secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.veldex-btn-danger {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #F87171;
+}
+.veldex-btn-danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #EF4444;
+}
+
+.veldex-btn-ghost {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+}
+.veldex-btn-ghost:hover:not(:disabled) {
+    color: white;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.veldex-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* BADGES */
+.veldex-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem; /* Increased padding */
+    border-radius: 1px;
+    font-family: var(--font-display);
+    font-size: 12px; /* Increased from 11px */
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    border: 1px solid transparent;
+}
+
+/* --- HEADER PROFILE --- */
+.header-profile-block {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+}
+
+.header-profile-block:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(0, 224, 255, 0.2);
+}
+
+.header-user-info {
+    text-align: right;
+}
+
+.header-username {
+    color: var(--color-text);
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.header-user-rank {
+    color: var(--color-accent);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 2px;
+    opacity: 0.9;
+}
+
+.header-corp-badge {
+    background: linear-gradient(135deg, rgba(0, 224, 255, 0.1) 0%, rgba(0, 224, 255, 0.05) 100%);
+    border: 1px solid rgba(0, 224, 255, 0.3);
+    color: var(--color-accent);
+    padding: 0.5rem 0.85rem;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    box-shadow: 0 0 15px rgba(0, 224, 255, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.header-corp-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: var(--color-accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--color-accent);
+}
+
+.veldex-badge-corpo {
+    background: rgba(0, 224, 255, 0.05);
+    border-color: rgba(0, 224, 255, 0.2);
+    color: var(--accent);
+}
+
+.veldex-badge-private {
+    background: rgba(255, 138, 0, 0.05);
+    border-color: rgba(255, 138, 0, 0.2);
+    color: var(--accent2);
+}
+
+.veldex-badge-status {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.2);
+    color: #34D399;
+}
+
+/* TABLES */
+.veldex-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+.veldex-table thead tr {
+    border-bottom: 1px solid var(--line);
+}
+.veldex-table th {
+    padding: 0.85rem 1rem;
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #94A3B8;
+}
+.veldex-table td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(0, 224, 255, 0.03);
+    font-size: 15px;
+    font-weight: 400;
+    transition: var(--transition);
+}
+.veldex-table tbody tr {
+    transition: var(--transition);
+}
+.veldex-table tbody tr:hover {
+    background: rgba(0, 224, 255, 0.02);
+}
+
+.veldex-row {
+    cursor: default;
+}
+
+/* STATUS DOTS */
+.veldex-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.veldex-status-dot--ok {
+    background: #00E0FF;
+    box-shadow: 0 0 6px rgba(0, 224, 255, 0.8);
+    animation: veldex-pulse-subtle 2s ease-in-out infinite;
+}
+
+.veldex-status-dot--error {
+    background: #FF4D4D;
+    box-shadow: 0 0 6px rgba(255, 77, 77, 0.8);
+}
+
+@keyframes veldex-pulse-subtle {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+/* TYPOGRAPHY */
+.veldex-title-page {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: white;
+}
+.veldex-subtitle-page {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+/* LAYOUT SCOPES */
+/* --- LAYOUT STRUCTURE --- */
+#sidebar-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 240px;
+    z-index: 50;
+    overflow-y: auto;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+}
+
+.main-content {
+    margin-left: 240px;
+    width: calc(100% - 240px);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.view-section {
+    width: 100%;
+    padding: 1.5rem; /* 24px gap from sidebar */
+}
+
+/* DASHBOARD SPECIFIC SCROLLS */
+.results-container {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.results-container thead {
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+    z-index: 20;
+    box-shadow: 0 1px 0 var(--line);
+}
+
+body.is-dashboard {
+    height: 100vh;
+    overflow: hidden;
+}
+
+body.is-dashboard .main-content {
+    height: 100vh;
+    overflow: hidden;
+}
+
+body.is-dashboard #view-dashboard {
+    height: calc(100vh - 84px);
+    overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+    #sidebar-container {
+        display: none; /* Mobile menu handled by navbar.js */
+    }
+    .main-content {
+        margin-left: 0;
+        width: 100%;
+    }
+    .view-section {
+        padding: 1rem;
+    }
+}
+
+/* --- INVENTORY & OCR READABILITY SCOPES --- */
+#view-inventory .veldex-input,
+#view-inventory .veldex-select,
+#ocr-section .veldex-input,
+#ocr-section .veldex-select {
+    font-size: 16px;
+    padding: 0.875rem 1.25rem;
+}
+
+#view-inventory .veldex-btn,
+#ocr-section .veldex-btn {
+    font-size: 14px;
+    padding: 0.75rem 1.5rem;
+}
+
+#view-inventory label,
+#ocr-section label {
+    font-size: 13px !important;
+    letter-spacing: 0.05em;
+}
+
+.ocr-mat-row {
+    transition: var(--transition);
+}
+
+.ocr-mat-row:hover {
+    background: rgba(0, 224, 255, 0.05);
+}
