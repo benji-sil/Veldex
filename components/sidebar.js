@@ -33,12 +33,65 @@ export function updateSidebarVersions() {
   `;
 }
 
+const navGroups = [
+  {
+    label: "Management",
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-40 group-hover/navbtn:opacity-100 transition-opacity"><path d="M12 2v20"/><path d="m19 9-7 7-7-7"/></svg>',
+    items: [
+      { label: "Inventory", view: "view-inventory", visible: true },
+      { label: "Corporation", view: "view-corporation", visible: true }
+    ]
+  },
+  {
+    label: "Data",
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-40 group-hover/navbtn:opacity-100 transition-opacity"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+    items: [
+      { label: "Tools", view: "view-tools", visible: true },
+      { label: "Mining", view: "view-mining", visible: false },
+      { label: "Components", view: "view-components", visible: false },
+      { label: "Market", view: "view-market", visible: false },
+      { label: "Wiki / Database", view: "view-wiki", visible: false }
+    ]
+  }
+];
+
 export function renderSidebar() {
   const container = document.getElementById("sidebar-container");
   if (!container) return;
 
+  const navHtml = navGroups.map(group => {
+    const visibleItems = group.items.filter(item => item.visible);
+    if (visibleItems.length === 0) return '';
+
+    const flyoutItemsHtml = visibleItems.map(item => `
+      <button data-view="${item.view}" class="nav-btn w-full text-left px-4 py-2.5 font-display text-[12px] font-bold uppercase tracking-[0.1em] text-muted hover:text-white hover:bg-accent/10 hover:pl-5 transition-all">
+        ${item.label}
+      </button>
+    `).join('');
+
+    return `
+      <div class="group/nav relative sidebar-group-container" data-group-label="${group.label}">
+        <button type="button" class="sidebar-group-btn group/navbtn w-full flex items-center justify-between gap-4 px-4 py-3.5 rounded-sm font-display text-[13px] font-bold uppercase tracking-[0.15em] text-muted hover:text-white transition-all relative overflow-hidden">
+          <div class="absolute left-0 top-0 w-1 h-0 bg-accent transition-all group-hover/navbtn:h-full group-[.flyout-open]/nav:h-full active-indicator"></div>
+          <div class="flex items-center gap-4">
+            ${group.icon}
+            <span>${group.label}</span>
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-20 group-hover/navbtn:opacity-100 group-[.flyout-open]/nav:rotate-90 lg:group-[.flyout-open]/nav:rotate-0 lg:group-hover/nav:translate-x-1 transition-all"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+
+        <!-- Flyout menu -->
+        <div class="hidden lg:block group-[.flyout-open]/nav:block lg:absolute lg:left-full lg:top-0 lg:ml-1 lg:w-48 lg:opacity-0 lg:invisible lg:group-hover/nav:opacity-100 lg:group-hover/nav:visible lg:group-[.flyout-open]/nav:opacity-100 lg:group-[.flyout-open]/nav:visible transition-all duration-200 z-50 lg:transform lg:-translate-x-2 lg:group-hover/nav:translate-x-0 lg:group-[.flyout-open]/nav:translate-x-0">
+          <div class="bg-panel border border-line lg:border-l-2 lg:border-l-accent rounded-sm py-2 shadow-2xl flex flex-col ml-4 lg:ml-0 mt-1 lg:mt-0">
+            ${flyoutItemsHtml}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
   container.innerHTML = `
-    <div class="flex flex-col h-full">
+    <div class="flex flex-col h-full lg:overflow-visible">
       <!-- Top Branding -->
       <div class="mb-10 px-4 pt-6">
         <div class="flex items-center gap-3">
@@ -50,35 +103,16 @@ export function renderSidebar() {
       </div>
 
       <!-- Navigation (Scrollable if needed) -->
-      <nav class="space-y-2 flex-1 px-2 veldex-scroll overflow-y-auto">
+      <nav class="space-y-2 flex-1 px-2 veldex-scroll overflow-y-auto lg:overflow-visible">
+        <!-- Dashboard (Standalone) -->
         <button data-view="view-dashboard" class="nav-btn group w-full flex items-center gap-4 px-4 py-3.5 rounded-sm font-display text-[13px] font-bold uppercase tracking-[0.15em] text-muted hover:text-white transition-all relative overflow-hidden">
           <div class="absolute left-0 top-0 w-1 h-0 bg-accent transition-all group-hover:h-full active-indicator"></div>
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-40 group-hover:opacity-100 transition-opacity"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
           <span>Dashboard</span>
         </button>
         
-        <button data-view="view-inventory" class="nav-btn group w-full flex items-center gap-4 px-4 py-3.5 rounded-sm font-display text-[13px] font-bold uppercase tracking-[0.15em] text-muted hover:text-white transition-all relative overflow-hidden">
-          <div class="absolute left-0 top-0 w-1 h-0 bg-accent transition-all group-hover:h-full active-indicator"></div>
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-40 group-hover:opacity-100 transition-opacity"><path d="M12 2v20"/><path d="m19 9-7 7-7-7"/></svg>
-          <span>Inventory</span>
-        </button>
-
-        <button data-view="view-corporation" class="nav-btn group w-full flex items-center gap-4 px-4 py-3.5 rounded-sm font-display text-[13px] font-bold uppercase tracking-[0.15em] text-muted hover:text-white transition-all relative overflow-hidden">
-          <div class="absolute left-0 top-0 w-1 h-0 bg-accent transition-all group-hover:h-full active-indicator"></div>
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-40 group-hover:opacity-100 transition-opacity"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <span>Corporation</span>
-        </button>
-
-        <button data-view="view-ocr" class="nav-btn group w-full flex items-center gap-4 px-4 py-3.5 rounded-sm font-display text-[13px] font-bold uppercase tracking-[0.15em] text-muted hover:text-white transition-all relative overflow-hidden">
-          <div class="absolute left-0 top-0 w-1 h-0 bg-accent transition-all group-hover:h-full active-indicator"></div>
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-40 group-hover:opacity-100 transition-opacity"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/><path d="M12 7v10"/></svg>
-          <span>OCR Scanner</span>
-        </button>
-
-        <button class="group w-full flex items-center gap-4 px-4 py-3.5 rounded-sm font-display text-[13px] font-bold uppercase tracking-[0.15em] text-muted/30 cursor-not-allowed">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-20"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.72V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-          <span>Paramètres</span>
-        </button>
+        <!-- Grouped Flyouts -->
+        ${navHtml}
       </nav>
 
       <!-- Versions & Branding -->
@@ -107,6 +141,51 @@ export function renderSidebar() {
       </div>
     </div>
   `;
+
+  // Add click handlers for mobile/desktop toggling
+  const groupContainers = container.querySelectorAll('.sidebar-group-container');
+  groupContainers.forEach(groupEl => {
+    const btn = groupEl.querySelector('.sidebar-group-btn');
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const label = groupEl.dataset.groupLabel;
+      console.log("SIDEBAR GROUP CLICKED:", label);
+
+      const isOpen = groupEl.classList.contains('flyout-open');
+
+      // Close all other groups
+      groupContainers.forEach(g => g.classList.remove('flyout-open'));
+
+      if (!isOpen) {
+        groupEl.classList.add('flyout-open');
+        console.log("SIDEBAR OPEN GROUP:", label);
+      } else {
+        console.log("SIDEBAR OPEN GROUP:", null);
+      }
+    });
+  });
+
+  // Click outside to close menus
+  document.addEventListener('click', (e) => {
+    if (!container.contains(e.target)) {
+      groupContainers.forEach(g => g.classList.remove('flyout-open'));
+    }
+  });
+
+  // Re-bind initNavigation automatically since we rewrote the DOM and lost bindings?
+  // Actually, router.js is called once at initDashboardPage.
+  // The user says: "Ensure child links call the existing route/view navigation exactly like before."
+  // Wait, router.js `initNavigation` binds by doing `.querySelectorAll(".nav-btn")` ONCE at startup!
+  // If we destroy and recreate `.nav-btn` elements in `renderSidebar()`, we MUST re-run `initNavigation()` or call `showView(view)` manually on click!
+  // Oh! That's why child links might not be working! They were recreated!
+  const navBtns = container.querySelectorAll('.nav-btn');
+  navBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close all flyouts when a navigation link is clicked
+      groupContainers.forEach(g => g.classList.remove('flyout-open'));
+    });
+  });
 
   // Initial update
   updateSidebarVersions();

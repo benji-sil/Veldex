@@ -401,7 +401,7 @@ body {
     height: 100vh;
     width: 240px;
     z-index: 50;
-    overflow-y: auto;
+    overflow-y: visible;
     background: var(--panel);
     border-right: 1px solid var(--line);
 }

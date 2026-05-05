@@ -22,6 +22,8 @@ import {
   renderRecentEntries, bindDashboardSearch
 } from "../pages/dashboard.js";
 
+import { renderToolsPage } from "../pages/data/tools.js";
+
 export async function reloadAllData() {
   await loadMyCorporation();
   await loadInvitations();
@@ -55,6 +57,7 @@ async function initDashboardPage() {
   renderSidebar();
   renderMobileNav();
   renderHeader();
+  renderToolsPage();
   initNavigation();
   
   // Fetch game versions and update sidebar once done

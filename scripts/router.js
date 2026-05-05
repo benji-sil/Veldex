@@ -5,7 +5,8 @@ import { updateHeader } from "../components/header.js";
 const VIEW_TITLES = {
   "view-dashboard": ["Dashboard", "Vue globale"],
   "view-inventory": ["Inventory", "Gestion des ressources"],
-  "view-corporation": ["Corporation", "Membres et Invitations"]
+  "view-corporation": ["Corporation", "Membres et Invitations"],
+  "view-tools": ["Tools", "Data & Resources"]
 };
 
 // ==================================================
