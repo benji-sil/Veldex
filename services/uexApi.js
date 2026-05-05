@@ -3,7 +3,7 @@ let uexItemsCache = [];
 let uexStationsCache = [];
 let uexCommoditiesCache = [];
 import { logger } from "../scripts/utils.js";
-
+import { detectVeldexItemFamily, VELDEX_FAMILIES } from "../config/itemTypes.js";
 export const STANTON_MAJOR_CITIES = ["Area18", "New Babbage", "Lorville", "Orison"];
 
 export async function fetchUexCategories() {
@@ -51,7 +51,8 @@ const ALLOWED_CATEGORIES = [
   "Coolers", "Shields", "Weapons", "Power Plants", "Quantum Drives", 
   "Missiles", "Turrets", "Mining", "Salvage", "Systems",
   "Personal Weapons", "Arms", "Helmets", "Torso", "Legs", "Undersuits", "Backpacks",
-  "Weapon Attachments", "Attachments", "Magazine", "Optic", "Suppressor", "Module"
+  "Weapon Attachments", "Attachments", "Magazine", "Optic", "Suppressor", "Module",
+  "Radar", "Radars", "Avionics"
 ];
 
 function cleanCommodityName(name) {
@@ -170,6 +171,15 @@ export function searchUexItems(query) {
       if (allowListOnly) {
         const isAllowed = ALLOWED_CATEGORIES.some(c => cat === c.toLowerCase() || cat.includes(c.toLowerCase()));
         if (!isAllowed) return false;
+      }
+
+      const detected = detectVeldexItemFamily(item);
+      if (detected && detected.family === VELDEX_FAMILIES.SHIP_COMPONENTS) {
+        const hasManufacturer = item.company_name || item.manufacturer || item.manufacturer_name || item.company || item.brand;
+        if (!hasManufacturer || String(hasManufacturer).trim() === "") {
+          console.log("FILTERED INVALID SHIP COMPONENT WITHOUT MANUFACTURER:", item);
+          return false;
+        }
       }
 
       return true;
@@ -323,9 +333,13 @@ export function extractUexAttributes(attributes) {
 
     const displayVal = unit ? `${val} ${unit}` : val;
 
-    if (attr.attribute_name === 'Size') extracted.size = val; // size stays raw (no unit)
-    else if (attr.attribute_name === 'Class') extracted.class = val;
-    else if (attr.attribute_name === 'Grade') extracted.grade = val;
+    const attrName = (attr.attribute_name || '').toLowerCase().replace(/\s+/g, '_');
+
+    if (attrName === 'size') extracted.size = val; // size stays raw (no unit)
+    else if (attrName === 'class') extracted.class = val;
+    else if (attrName === 'grade' || attrName === 'grade_letter') {
+      if (!extracted.grade) extracted.grade = val;
+    }
     
     // Store with unit appended for display purposes
     extracted.raw_attributes[attr.attribute_name] = displayVal;

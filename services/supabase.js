@@ -12,4 +12,3 @@ export const supabase = createClient(
   window.VELDEX_ENV.SUPABASE_URL,
   window.VELDEX_ENV.SUPABASE_ANON_KEY
 );
-

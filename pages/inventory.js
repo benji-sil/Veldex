@@ -13,16 +13,22 @@ const triggerReload = () => window.dispatchEvent(new Event("reload-all-data"));
 /**
  * Manually upserts an inventory entry by checking for an identical row first.
  * Identical rows match on: item_name, item_category, component_size, component_class, 
- * component_grade, location_name, owner_user_id, corporation_id, quality, unit_type, visibility.
+ * component_grade, location_name, owner_user_id, visibility, and corporation_id (when visibility is "corp").
  * 
  * If found: updates quantity and updated_at.
  * If not found: inserts new row.
  */
 async function upsertInventoryEntry(payload) {
+  // Normalize empty values in the payload
+  Object.keys(payload).forEach(key => {
+    if (payload[key] === undefined || payload[key] === "") {
+      payload[key] = null;
+    }
+  });
+
   const identityFields = [
     "item_name", "item_category", "component_size", "component_class",
-    "component_grade", "location_name", "owner_user_id", "corporation_id",
-    "quality", "unit_type", "visibility"
+    "component_grade", "location_name", "owner_user_id", "visibility"
   ];
 
   // 1. Build query to check for existing row
@@ -37,25 +43,61 @@ async function upsertInventoryEntry(payload) {
     }
   }
 
-  const { data: existingRows, error: fetchError } = await query.maybeSingle();
+  // Only consider corporation_id if visibility is "corp"
+  if (payload.visibility === "corp") {
+    if (payload.corporation_id === null || payload.corporation_id === undefined) {
+      query = query.is("corporation_id", null);
+    } else {
+      query = query.eq("corporation_id", payload.corporation_id);
+    }
+  }
+
+  console.log("UPSERT CALLED", payload);
+
+  const { data: existingRows, error: fetchError } = await query.select();
 
   if (fetchError) {
     logger.error("Inventory", "Fetch error:", fetchError);
     return { error: fetchError };
   }
 
-  if (existingRows) {
-    // 2. Existing row found -> UPDATE
-    const newQty = (parseFloat(existingRows.quantity) || 0) + (parseFloat(payload.quantity) || 0);
-    
-    return await supabase
+  console.log("MATCHING ROWS FOUND", existingRows);
+
+  if (existingRows && existingRows.length > 0) {
+    // 2. Existing row found -> sum quantities and UPDATE first row, delete the rest
+    let sumQty = existingRows.reduce((sum, row) => sum + (parseFloat(row.quantity) || 0), 0);
+    const newQty = sumQty + (parseFloat(payload.quantity) || 0);
+
+    const firstRowId = existingRows[0].id;
+    const otherRowIds = existingRows.slice(1).map(row => row.id);
+
+    const { data: updateData, error: updateError } = await supabase
       .from("inventory_entries")
       .update({
         quantity: Number.isInteger(newQty) ? newQty : parseFloat(newQty.toFixed(3)),
         updated_at: new Date().toISOString()
       })
-      .eq("id", existingRows.id)
+      .eq("id", firstRowId)
       .select();
+
+    if (updateError) {
+      logger.error("Inventory", "Update error:", updateError);
+      return { error: updateError };
+    }
+
+    // Delete other duplicate rows if any exist
+    if (otherRowIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("inventory_entries")
+        .delete()
+        .in("id", otherRowIds);
+        
+      if (deleteError) {
+        logger.error("Inventory", "Error deleting duplicate rows:", deleteError);
+      }
+    }
+
+    return { data: updateData };
   } else {
     // 3. No existing row -> INSERT
     return await supabase
@@ -588,6 +630,7 @@ export function bindUexTest() {
           const item = results.find(i => String(i.id) === String(itemId));
 
           if (!item) return;
+          console.log("SELECT ITEM CLICKED:", item);
 
 
           // Afficher "Chargement..."
@@ -630,6 +673,7 @@ export function bindUexTest() {
             normalizedAttributes,
             detectedFamily: detected
           };
+          console.log("SELECTED ITEM STATE:", currentSelectedUexItem);
 
           renderDynamicForm(veldexItem, item, detected);
         });
@@ -746,6 +790,8 @@ export function bindUexTest() {
         showToast("Veuillez sélectionner un item.", "error");
         return;
       }
+      
+      console.log("ADD INVENTORY CLICKED");
 
       const qtyInput = $("uex-quantity");
       const locInput = $("uex-location");
@@ -855,6 +901,10 @@ export function bindUexTest() {
         };
       }
 
+      console.log("SHIP COMPONENT MAPPER INPUT:", currentSelectedUexItem.rawItem);
+      console.log("SHIP COMPONENT MAPPER OUTPUT:", currentSelectedUexItem.veldexItem);
+      console.log("FINAL INVENTORY PAYLOAD:", payload);
+      console.log("PAYLOAD BEFORE UPSERT:", payload);
 
       const { data, error } = await upsertInventoryEntry(payload);
 
