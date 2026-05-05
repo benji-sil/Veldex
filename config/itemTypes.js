@@ -133,7 +133,17 @@ export function detectVeldexItemFamily(item, attributes = []) {
     };
   }
 
-  // 8. fallback
+  // 8. Creature Loot -> Autre
+  const creatureKeywords = ["creature loot", "valakkar", "kopion", "marok"];
+  if (match(creatureKeywords) || nameMatch(creatureKeywords)) {
+    return {
+      family: VELDEX_FAMILIES.OTHER,
+      subtype: "Creature Loot",
+      label: VELDEX_LABELS[VELDEX_FAMILIES.OTHER]
+    };
+  }
+
+  // 9. fallback
   return {
     family: VELDEX_FAMILIES.OTHER,
     subtype: cat || "Inconnu",

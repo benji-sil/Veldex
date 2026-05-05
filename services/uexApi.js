@@ -39,6 +39,17 @@ export async function fetchAllUexItems() {
   const uniqueItemsMap = new Map();
   allItems.forEach(item => {
     if (!uniqueItemsMap.has(item.id)) {
+      const nameL = (item.name || "").toLowerCase();
+      if (nameL.includes("valakkar") || nameL.includes("kopion") || nameL.includes("marok")) {
+        item.category = "Creature Loot";
+        item.section = "Creature Loot";
+        
+        // Clean display labels for Valakkar Fangs
+        if (nameL.includes("valakkar fang (junior)")) item.name = "Junior Valakkar Fang";
+        if (nameL.includes("valakkar fang (juvenile)")) item.name = "Juvenile Valakkar Fang";
+        if (nameL.includes("valakkar fang (adult)")) item.name = "Adult Valakkar Fang";
+        if (nameL.includes("valakkar fang (apex)")) item.name = "Apex Valakkar Fang";
+      }
       uniqueItemsMap.set(item.id, item);
     }
   });
@@ -52,7 +63,7 @@ const ALLOWED_CATEGORIES = [
   "Missiles", "Turrets", "Mining", "Salvage", "Systems",
   "Personal Weapons", "Arms", "Helmets", "Torso", "Legs", "Undersuits", "Backpacks",
   "Weapon Attachments", "Attachments", "Magazine", "Optic", "Suppressor", "Module",
-  "Radar", "Radars", "Avionics"
+  "Radar", "Radars", "Avionics", "Creature Loot"
 ];
 
 function cleanCommodityName(name) {
@@ -173,6 +184,10 @@ export function searchUexItems(query) {
         if (!isAllowed) return false;
       }
 
+      if (normName.includes("valakkar")) {
+        console.log("VALAKKAR RAW ITEM:", item);
+      }
+
       const detected = detectVeldexItemFamily(item);
       if (detected && detected.family === VELDEX_FAMILIES.SHIP_COMPONENTS) {
         const hasManufacturer = item.company_name || item.manufacturer || item.manufacturer_name || item.company || item.brand;
@@ -257,7 +272,13 @@ export function searchUexItems(query) {
     return a.name.localeCompare(b.name);
   });
 
-  return filtered.slice(0, 50);
+  const finalResults = filtered.slice(0, 50);
+
+  if (normalizedQuery.includes("valakkar") || normalizedQuery.includes("fang")) {
+    console.log("VALAKKAR SEARCH RESULTS:", finalResults);
+  }
+
+  return finalResults;
 }
 
 export async function fetchUexItemsByCategory(categoryId) {
