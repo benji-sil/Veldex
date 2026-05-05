@@ -80,9 +80,9 @@ export function renderSidebar() {
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-20 group-hover/navbtn:opacity-100 group-[.flyout-open]/nav:rotate-90 lg:group-[.flyout-open]/nav:rotate-0 lg:group-hover/nav:translate-x-1 transition-all"><path d="m9 18 6-6-6-6"/></svg>
         </button>
 
-        <!-- Flyout menu -->
-        <div class="hidden lg:block group-[.flyout-open]/nav:block lg:absolute lg:left-full lg:top-0 lg:ml-1 lg:w-48 lg:opacity-0 lg:invisible lg:group-hover/nav:opacity-100 lg:group-hover/nav:visible lg:group-[.flyout-open]/nav:opacity-100 lg:group-[.flyout-open]/nav:visible transition-all duration-200 z-50 lg:transform lg:-translate-x-2 lg:group-hover/nav:translate-x-0 lg:group-[.flyout-open]/nav:translate-x-0">
-          <div class="bg-panel border border-line lg:border-l-2 lg:border-l-accent rounded-sm py-2 shadow-2xl flex flex-col ml-4 lg:ml-0 mt-1 lg:mt-0">
+        <!-- Flyout menu (Desktop only) -->
+        <div class="hidden lg:block lg:absolute lg:left-full lg:top-0 lg:ml-1 lg:w-48 lg:opacity-0 lg:invisible lg:group-hover/nav:opacity-100 lg:group-hover/nav:visible lg:group-[.flyout-open]/nav:opacity-100 lg:group-[.flyout-open]/nav:visible transition-all duration-200 z-50 lg:transform lg:-translate-x-2 lg:group-hover/nav:translate-x-0 lg:group-[.flyout-open]/nav:translate-x-0">
+          <div class="bg-panel border border-line lg:border-l-2 lg:border-l-accent rounded-sm py-2 shadow-2xl flex flex-col">
             ${flyoutItemsHtml}
           </div>
         </div>

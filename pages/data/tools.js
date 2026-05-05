@@ -9,12 +9,12 @@ export function renderToolsPage() {
   if (!container) return;
 
   const createLinkCard = (title, desc, url) => `
-    <div class="flex items-center justify-between p-4 bg-panel2/40 border border-line rounded-sm hover:border-accent/40 transition-all group">
-      <div class="flex-1 pr-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-panel2/40 border border-line rounded-sm hover:border-accent/40 transition-all group gap-3">
+      <div class="flex-1">
         <p class="text-[13px] font-display font-bold text-white uppercase tracking-[0.1em] group-hover:text-accent transition-colors">${title}</p>
         <p class="text-[11px] font-sans text-muted mt-1 leading-tight">${desc}</p>
       </div>
-      <a href="${url}" target="_blank" rel="noopener noreferrer" class="veldex-btn veldex-btn-secondary !px-3 !py-2 !text-[10px] shrink-0 hover:!text-accent hover:!border-accent/40 hover:!bg-accent/5">
+      <a href="${url}" target="_blank" rel="noopener noreferrer" class="veldex-btn veldex-btn-secondary !px-3 !py-2 !text-[10px] shrink-0 hover:!text-accent hover:!border-accent/40 hover:!bg-accent/5 w-full sm:w-auto flex items-center justify-center">
         Open
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-1 opacity-60"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
       </a>

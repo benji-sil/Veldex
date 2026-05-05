@@ -3,8 +3,9 @@ export function renderMobileNav() {
   if (!container) return;
 
   container.innerHTML = `
-    <button data-view="view-dashboard" class="nav-btn px-3 py-2 rounded-sm font-display text-sm font-semibold uppercase tracking-wide text-muted hover:text-white transition-colors">Dashboard</button>
-    <button data-view="view-inventory" class="nav-btn px-3 py-2 rounded-sm font-display text-sm font-semibold uppercase tracking-wide text-muted hover:text-white transition-colors">Inventory</button>
-    <button data-view="view-corporation" class="nav-btn px-3 py-2 rounded-sm font-display text-sm font-semibold uppercase tracking-wide text-muted hover:text-white transition-colors">Corporation</button>
+    <button data-view="view-dashboard" class="nav-btn px-4 py-2 rounded-sm font-display text-sm font-semibold uppercase tracking-wide text-muted hover:text-white transition-colors shrink-0">Dashboard</button>
+    <button data-view="view-inventory" class="nav-btn px-4 py-2 rounded-sm font-display text-sm font-semibold uppercase tracking-wide text-muted hover:text-white transition-colors shrink-0">Inventory</button>
+    <button data-view="view-corporation" class="nav-btn px-4 py-2 rounded-sm font-display text-sm font-semibold uppercase tracking-wide text-muted hover:text-white transition-colors shrink-0">Corporation</button>
+    <button data-view="view-tools" class="nav-btn px-4 py-2 rounded-sm font-display text-sm font-semibold uppercase tracking-wide text-muted hover:text-white transition-colors shrink-0">Tools</button>
   `;
 }

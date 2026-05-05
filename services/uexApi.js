@@ -184,9 +184,6 @@ export function searchUexItems(query) {
         if (!isAllowed) return false;
       }
 
-      if (normName.includes("valakkar")) {
-        console.log("VALAKKAR RAW ITEM:", item);
-      }
 
       const detected = detectVeldexItemFamily(item);
       if (detected && detected.family === VELDEX_FAMILIES.SHIP_COMPONENTS) {
@@ -274,9 +271,6 @@ export function searchUexItems(query) {
 
   const finalResults = filtered.slice(0, 50);
 
-  if (normalizedQuery.includes("valakkar") || normalizedQuery.includes("fang")) {
-    console.log("VALAKKAR SEARCH RESULTS:", finalResults);
-  }
 
   return finalResults;
 }

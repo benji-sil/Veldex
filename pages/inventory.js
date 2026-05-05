@@ -630,7 +630,6 @@ export function bindUexTest() {
           const item = results.find(i => String(i.id) === String(itemId));
 
           if (!item) return;
-          console.log("SELECT ITEM CLICKED:", item);
 
 
           // Afficher "Chargement..."
@@ -673,7 +672,6 @@ export function bindUexTest() {
             normalizedAttributes,
             detectedFamily: detected
           };
-          console.log("SELECTED ITEM STATE:", currentSelectedUexItem);
 
           renderDynamicForm(veldexItem, item, detected);
         });
