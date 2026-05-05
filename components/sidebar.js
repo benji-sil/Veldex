@@ -1,4 +1,4 @@
-const VELDEX_VERSION = "v0.1.2";
+const VELDEX_VERSION = "v0.1.3";
 
 export function updateSidebarVersions() {
   const container = document.getElementById("sidebar-versions-content");

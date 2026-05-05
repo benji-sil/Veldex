@@ -117,13 +117,14 @@ export function detectVeldexItemFamily(item, attributes = []) {
   }
 
   // 7b. Ship components classiques
-  const shipKeywords = ["cooler", "shield generator", "shield", "power plant", "quantum drive"];
+  const shipKeywords = ["cooler", "shield generator", "shield", "power plant", "quantum drive", "radar", "avionics"];
   if (match(shipKeywords) || name.includes("winter-star")) {
     let subtype = "Ship Component";
     if (match(["cooler"]) || name.includes("winter-star")) subtype = "Cooler";
     else if (match(["shield generator", "shield"])) subtype = "Shield Generator";
     else if (match(["power plant"])) subtype = "Power Plant";
     else if (match(["quantum drive"])) subtype = "Quantum Drive";
+    else if (match(["radar", "avionics"])) subtype = "Radar / Avionics";
 
     return {
       family: VELDEX_FAMILIES.SHIP_COMPONENTS,
