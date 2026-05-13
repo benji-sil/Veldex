@@ -2,9 +2,11 @@ import { $, logger, escapeHtml, toggleMobileSticky } from "../scripts/utils.js";
 import { searchUexStations, searchUexItems, fetchAllUexItems, fetchUexStations, fetchUexCommodities } from "../services/uexApi.js";
 import { runOcrOnImage } from "../services/ocrService.js";
 import { loadCargoGrids, loadCargoGridZones } from "./cargoGrids.js";
+import { getCargoGridLayoutSignedUrl } from "../scripts/cargoGridStorage.js";
 
 let availableGrids = [];
 let activeZones = [];
+let currentLayoutImageUrl = null;
 
 const MANIFEST_KEY = "veldex_cargo_manifest_v1";
 
@@ -1203,6 +1205,20 @@ function updateManifestUI() {
             </select>
           </div>
         </div>
+        ${currentLayoutImageUrl ? `
+          <div class="mb-6 border border-line rounded-sm overflow-hidden bg-bg/50">
+            <div class="px-4 py-2 border-b border-line/50 flex justify-between items-center cursor-pointer hover:bg-panel2/50 transition-colors" onclick="this.nextElementSibling.classList.toggle('hidden')">
+              <h4 class="text-[10px] font-display font-bold text-muted uppercase tracking-widest flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                Layout Reference
+              </h4>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-muted"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+            <div class="p-2 hidden">
+              <img src="${currentLayoutImageUrl}" alt="Grid Layout" class="max-w-full h-auto rounded" style="max-height: 400px; object-fit: contain; margin: 0 auto; display: block;" />
+            </div>
+          </div>
+        ` : ''}
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           ${zonesHtml}
         </div>
@@ -1259,8 +1275,15 @@ export async function refreshCargoGridsForManifest() {
   const manifest = getManifest();
   if (manifest.selectedCargoGridId) {
     activeZones = await loadCargoGridZones(manifest.selectedCargoGridId);
+    const grid = availableGrids.find(g => g.id === manifest.selectedCargoGridId);
+    if (grid && grid.layout_image_path) {
+      currentLayoutImageUrl = await getCargoGridLayoutSignedUrl(grid.layout_image_path);
+    } else {
+      currentLayoutImageUrl = null;
+    }
   } else {
     activeZones = [];
+    currentLayoutImageUrl = null;
   }
   updateManifestUI();
 }

@@ -1,4 +1,4 @@
-const VELDEX_VERSION = "v0.1.5";
+const VELDEX_VERSION = "v0.1.5.1";
 
 export function updateSidebarVersions() {
   const container = document.getElementById("sidebar-versions-content");
@@ -101,13 +101,12 @@ export function renderSidebar() {
   container.innerHTML = `
     <div class="flex flex-col h-full lg:overflow-visible">
       <!-- Top Branding -->
-      <div class="mb-10 px-4 pt-6">
-        <div class="flex items-center gap-3">
-          <div class="flex flex-col">
-            <h1 class="text-2xl font-display font-black text-white tracking-[0.1em] leading-none">VELDEX</h1>
-            <p class="text-[11px] font-display font-bold text-accent/60 uppercase tracking-[0.3em] mt-1.5">Industrial Intelligence</p>
-          </div>
-        </div>
+      <div class="veldex-sidebar-brand mb-4">
+        <img 
+          src="/assets/brand/veldex-logo-full.png?v=2" 
+          alt="VELDEX" 
+          class="veldex-sidebar-logo"
+        />
       </div>
 
       <!-- Navigation (Scrollable if needed) -->

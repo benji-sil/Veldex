@@ -406,6 +406,33 @@ body {
     border-right: 1px solid var(--line);
 }
 
+.veldex-sidebar-brand {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 18px 18px 22px;
+  background: transparent;
+}
+
+.veldex-sidebar-logo {
+  display: block;
+  width: 140px;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  background: transparent;
+}
+
+@media (max-width: 768px) {
+  .veldex-sidebar-brand {
+    padding: 14px 16px;
+  }
+
+  .veldex-sidebar-logo {
+    width: 120px;
+  }
+}
+
 .main-content {
     margin-left: 240px;
     width: calc(100% - 240px);

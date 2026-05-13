@@ -45,5 +45,5 @@ Current Version: **v0.1.2**
 ---
 
 ## 📌 Notes
-
-This version focuses on usability, stability, and interface clarity before expanding core features.
+- This version focuses on usability, stability, and interface clarity before expanding core features.
+- **Console Warnings**: Cloudflare `__cf_bm` cookie warnings may appear in local development when loading external signed resources (Supabase Storage). This is browser-side and non-blocking.

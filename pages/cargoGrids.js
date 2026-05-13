@@ -1,5 +1,6 @@
 import { supabase } from "../services/supabase.js";
 import { $, logger, escapeHtml, getCurrentUser } from "../scripts/utils.js";
+import { getCargoGridLayoutSignedUrl, uploadCargoGridLayoutImage, removeCargoGridLayoutImage } from "../scripts/cargoGridStorage.js";
 
 // ==================================================
 // STATE
@@ -7,6 +8,7 @@ import { $, logger, escapeHtml, getCurrentUser } from "../scripts/utils.js";
 let cargoGrids = [];
 let selectedGridId = null;
 let selectedGridZones = [];
+let currentLayoutImageUrl = null;
 
 // ==================================================
 // SUPABASE QUERIES - GRIDS
@@ -57,6 +59,22 @@ export async function updateCargoGrid(gridId, { shipName, gridName, notes }) {
 
   if (error) {
     logger.error("CargoGrids", "Failed to update grid", error);
+    return null;
+  }
+  
+  return data;
+}
+
+export async function updateCargoGridLayoutImagePath(gridId, path) {
+  const { data, error } = await supabase
+    .from('ship_cargo_grids')
+    .update({ layout_image_path: path, updated_at: new Date().toISOString() })
+    .eq('id', gridId)
+    .select()
+    .single();
+
+  if (error) {
+    logger.error("CargoGrids", "Failed to update grid layout image path", error);
     return null;
   }
   
@@ -226,7 +244,16 @@ async function refreshCargoGrids() {
     const gridExists = cargoGrids.find(g => g.id === selectedGridId);
     if (!gridExists) {
       selectedGridId = null;
+      currentLayoutImageUrl = null;
+    } else {
+      if (gridExists.layout_image_path) {
+        currentLayoutImageUrl = await getCargoGridLayoutSignedUrl(gridExists.layout_image_path);
+      } else {
+        currentLayoutImageUrl = null;
+      }
     }
+  } else {
+    currentLayoutImageUrl = null;
   }
   
   renderSelectedGridEditor();
@@ -263,6 +290,14 @@ window.selectCargoGrid = async function(gridId) {
   }
   
   await loadCargoGridZones(gridId);
+  
+  const grid = cargoGrids.find(g => g.id === gridId);
+  if (grid && grid.layout_image_path) {
+    currentLayoutImageUrl = await getCargoGridLayoutSignedUrl(grid.layout_image_path);
+  } else {
+    currentLayoutImageUrl = null;
+  }
+
   renderSelectedGridEditor();
 };
 
@@ -319,8 +354,32 @@ function renderSelectedGridEditor() {
       </div>
     </form>
 
-    <!-- Cargo Zones Management -->
+    <!-- Grid Layout Image -->
     <div class="flex items-center justify-between mb-4">
+      <h3 class="text-[12px] font-display font-black text-white uppercase tracking-[0.2em]">Layout Image</h3>
+    </div>
+    <div class="mb-6 p-4 border border-line border-dashed rounded-sm bg-panel2/30 flex flex-col items-center justify-center relative min-h-[120px]">
+      ${currentLayoutImageUrl ? `
+        <div class="relative group w-full flex justify-center">
+          <img src="${currentLayoutImageUrl}" alt="Grid Layout" class="max-w-full h-auto rounded" style="max-height: 300px; object-fit: contain;" />
+          <div class="absolute inset-0 bg-bg/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 rounded">
+            <button type="button" class="veldex-btn-secondary h-8 px-3 text-[10px]" onclick="document.getElementById('cg-layout-upload').click()">REPLACE</button>
+            <button type="button" id="cg-layout-remove-btn" class="veldex-btn-ghost text-red-400 hover:bg-red-500/20 h-8 px-3 text-[10px] border border-red-500/30">REMOVE</button>
+          </div>
+        </div>
+      ` : `
+        <div class="text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" class="text-muted mx-auto mb-2 opacity-50"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+          <p class="text-[11px] text-muted font-sans mb-3">Upload a layout diagram (JPG, PNG, WEBP - max 5MB)</p>
+          <button type="button" class="veldex-btn-secondary h-8 px-4 text-[10px]" onclick="document.getElementById('cg-layout-upload').click()">UPLOAD IMAGE</button>
+        </div>
+      `}
+      <input type="file" id="cg-layout-upload" class="hidden" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+      <div id="cg-layout-upload-status" class="absolute bottom-2 right-2 text-[9px] text-accent font-mono hidden uppercase">Uploading...</div>
+    </div>
+
+    <!-- Cargo Zones Management -->
+    <div class="flex items-center justify-between mb-4 border-t border-line/30 pt-6">
       <h3 class="text-[12px] font-display font-black text-white uppercase tracking-[0.2em]">Cargo Zones</h3>
     </div>
 
@@ -439,6 +498,73 @@ function bindCargoGridEditorEvents() {
         btn.textContent = "SAVE";
         if (updated) {
           await refreshCargoGrids();
+        }
+      }
+    });
+  }
+
+  const layoutUpload = $("cg-layout-upload");
+  const layoutStatus = $("cg-layout-upload-status");
+  if (layoutUpload) {
+    layoutUpload.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        alert("File size exceeds 5MB limit.");
+        return;
+      }
+
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        alert("Only JPG, PNG, and WEBP formats are allowed.");
+        return;
+      }
+
+      if (layoutStatus) {
+        layoutStatus.classList.remove("hidden");
+        layoutStatus.textContent = "Uploading...";
+      }
+
+      const user = await getCurrentUser();
+      if (user && selectedGridId) {
+        const grid = cargoGrids.find(g => g.id === selectedGridId);
+        
+        // Remove existing image from storage if present
+        if (grid && grid.layout_image_path) {
+          await removeCargoGridLayoutImage(grid.layout_image_path);
+        }
+
+        const newPath = await uploadCargoGridLayoutImage(user.id, selectedGridId, file);
+        if (newPath) {
+          await updateCargoGridLayoutImagePath(selectedGridId, newPath);
+          await window.selectCargoGrid(selectedGridId); // Refresh UI
+        } else {
+          alert("Failed to upload image.");
+        }
+      }
+
+      if (layoutStatus) {
+        layoutStatus.classList.add("hidden");
+      }
+    });
+  }
+
+  const layoutRemoveBtn = $("cg-layout-remove-btn");
+  if (layoutRemoveBtn) {
+    layoutRemoveBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm("Are you sure you want to remove the layout image?")) return;
+
+      const grid = cargoGrids.find(g => g.id === selectedGridId);
+      if (grid && grid.layout_image_path) {
+        const success = await removeCargoGridLayoutImage(grid.layout_image_path);
+        if (success) {
+          await updateCargoGridLayoutImagePath(selectedGridId, null);
+          await window.selectCargoGrid(selectedGridId); // Refresh UI
+        } else {
+          alert("Failed to remove image.");
         }
       }
     });
