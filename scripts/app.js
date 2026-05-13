@@ -23,6 +23,8 @@ import {
 } from "../pages/dashboard.js";
 
 import { renderToolsPage } from "../pages/data/tools.js";
+import { renderManifestPage, bindManifestEvents } from "../pages/cargoManifest.js";
+import { renderCargoGridsPage } from "../pages/cargoGrids.js";
 
 export async function reloadAllData() {
   await loadMyCorporation();
@@ -58,6 +60,8 @@ async function initDashboardPage() {
   renderMobileNav();
   renderHeader();
   renderToolsPage();
+  renderManifestPage();
+  renderCargoGridsPage();
   initNavigation();
   
   // Fetch game versions and update sidebar once done
@@ -70,6 +74,7 @@ async function initDashboardPage() {
   bindUexTest();
   bindInventoryEntriesFilters();
   bindOcr();
+  bindManifestEvents();
   
   $("refresh-members")?.addEventListener("click", loadCorporationMembers);
   $("create-corp-btn")?.addEventListener("click", createCorporation);

@@ -12,6 +12,7 @@
     href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="styles/veldex-system.css">
+  <!-- TODO: replace Tailwind CDN with local Tailwind build before production -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -529,6 +530,16 @@
       <!-- DATA / TOOLS VIEW -->
       <section id="view-tools" class="view-section hidden space-y-8">
         <!-- Injected via pages/data/tools.js -->
+      </section>
+
+      <!-- CARGO MANIFEST VIEW -->
+      <section id="view-manifest" class="view-section hidden space-y-8">
+        <!-- Injected via pages/cargoManifest.js -->
+      </section>
+
+      <!-- CARGO GRIDS VIEW -->
+      <section id="view-cargo-grids" class="view-section hidden space-y-8">
+        <!-- Injected via pages/cargoGrids.js -->
       </section>
 
     </main>

@@ -6,7 +6,9 @@ const VIEW_TITLES = {
   "view-dashboard": ["Dashboard", "Vue globale"],
   "view-inventory": ["Inventory", "Gestion des ressources"],
   "view-corporation": ["Corporation", "Membres et Invitations"],
-  "view-tools": ["Tools", "Data & Resources"]
+  "view-tools": ["Tools", "Data & Resources"],
+  "view-manifest": ["Cargo Manifest", "Organize hauling missions"],
+  "view-cargo-grids": ["Cargo Grids", "Custom Ship Layouts"]
 };
 
 // ==================================================

@@ -1034,7 +1034,10 @@ function populateInventoryFilters() {
 
   const populateSelect = (selectEl, setValues) => {
     if (!selectEl) {
-      logger.warn("Inventory", "Filter select element not found.");
+      const invView = document.getElementById("view-inventory");
+      if (invView && !invView.classList.contains("hidden")) {
+        logger.warn("Inventory", "Filter select element not found.");
+      }
       return;
     }
     const isClassFilter = selectEl.id === "filter-uex-class";
@@ -1058,7 +1061,10 @@ function populateInventoryFilters() {
 
   const populateSelectWithLabels = (selectEl, setValues) => {
     if (!selectEl) {
-      logger.warn("Inventory", "Filter select element not found.");
+      const invView = document.getElementById("view-inventory");
+      if (invView && !invView.classList.contains("hidden")) {
+        logger.warn("Inventory", "Filter select element not found.");
+      }
       return;
     }
     const firstOpt = selectEl.options[0];
