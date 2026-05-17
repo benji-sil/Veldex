@@ -7,6 +7,7 @@ import { getCargoGridLayoutSignedUrl } from "../scripts/cargoGridStorage.js";
 let availableGrids = [];
 let activeZones = [];
 let currentLayoutImageUrl = null;
+let editingTaskId = null;
 
 const MANIFEST_KEY = "veldex_cargo_manifest_v1";
 
@@ -21,18 +22,70 @@ function getManifest() {
       if (!parsed.hasOwnProperty('showDeliveredTasks')) {
         parsed.showDeliveredTasks = false;
       }
-      if (parsed.tasks) {
-        parsed.tasks.forEach(t => {
-          if (!t.status) t.status = "pending";
-          if (!t.cargoZoneId) t.cargoZoneId = "";
-        });
+      if (!parsed.hasOwnProperty('dropoffCargoNotes')) {
+        parsed.dropoffCargoNotes = {};
       }
+      
+      // Ensure missions exists
+      if (!parsed.hasOwnProperty('missions')) {
+        parsed.missions = [];
+      }
+      
+      // Legacy migration: If old flat tasks array exists and has elements, convert to legacy mission
+      if (parsed.tasks && Array.isArray(parsed.tasks)) {
+        if (parsed.tasks.length > 0) {
+          let legacyMission = parsed.missions.find(m => m.id === "mission_legacy");
+          if (!legacyMission) {
+            legacyMission = {
+              id: "mission_legacy",
+              title: "Imported Tasks",
+              createdAt: new Date().toISOString(),
+              source: "legacy",
+              tasks: []
+            };
+            parsed.missions.unshift(legacyMission);
+          }
+          parsed.tasks.forEach(t => {
+            if (!t.status) t.status = "pending";
+            if (!t.cargoZoneId) t.cargoZoneId = "";
+            if (!legacyMission.tasks.some(lt => lt.id === t.id)) {
+              legacyMission.tasks.push(t);
+            }
+          });
+        }
+        
+        // Remove old key immediately
+        delete parsed.tasks;
+        
+        // Save immediately to persist migrated format and prevent re-run
+        try {
+          localStorage.setItem(MANIFEST_KEY, JSON.stringify(parsed));
+        } catch (err) {
+          logger.error("Migration", "Failed to save migrated manifest", err);
+        }
+      }
+      
+      // Ensure tasks inside missions have proper default values
+      parsed.missions.forEach(m => {
+        if (m.tasks) {
+          m.tasks.forEach(t => {
+            if (!t.status) t.status = "pending";
+            if (!t.cargoZoneId) t.cargoZoneId = "";
+          });
+        }
+      });
+      
       return parsed;
     }
   } catch (e) {
     logger.error("Manifest", "Failed to parse local manifest", e);
   }
-  return { tasks: [], dropoffCargoNotes: {}, selectedCargoGridId: null, showDeliveredTasks: false };
+  return { missions: [], dropoffCargoNotes: {}, selectedCargoGridId: null, showDeliveredTasks: false };
+}
+
+function getAllTasks(data) {
+  if (!data || !data.missions) return [];
+  return data.missions.flatMap(m => m.tasks || []);
 }
 
 function saveManifest(data) {
@@ -46,18 +99,32 @@ function saveManifest(data) {
 
 function updateTaskStatus(taskId, newStatus) {
   const data = getManifest();
-  const task = data.tasks.find(t => t.id === taskId);
-  if (task) {
-    task.status = newStatus;
+  let found = false;
+  for (const m of data.missions) {
+    const task = m.tasks.find(t => t.id === taskId);
+    if (task) {
+      task.status = newStatus;
+      found = true;
+      break;
+    }
+  }
+  if (found) {
     saveManifest(data);
   }
 }
 
 function updateTaskZone(taskId, newZoneId) {
   const data = getManifest();
-  const task = data.tasks.find(t => t.id === taskId);
-  if (task) {
-    task.cargoZoneId = newZoneId;
+  let found = false;
+  for (const m of data.missions) {
+    const task = m.tasks.find(t => t.id === taskId);
+    if (task) {
+      task.cargoZoneId = newZoneId;
+      found = true;
+      break;
+    }
+  }
+  if (found) {
     saveManifest(data);
   }
 }
@@ -65,11 +132,13 @@ function updateTaskZone(taskId, newZoneId) {
 function applyZoneToDropoffGroup(dropoffStation, newZoneId) {
   const data = getManifest();
   let modified = false;
-  data.tasks.forEach(t => {
-    if (t.dropoffStation === dropoffStation) {
-      t.cargoZoneId = newZoneId || null;
-      modified = true;
-    }
+  data.missions.forEach(m => {
+    m.tasks.forEach(t => {
+      if (t.dropoffStation === dropoffStation) {
+        t.cargoZoneId = newZoneId || null;
+        modified = true;
+      }
+    });
   });
   if (modified) {
     saveManifest(data);
@@ -153,6 +222,21 @@ function normalizeOcrText(rawText) {
   // Normalize multiple spaces into one
   text = text.replace(/[ \t]+/g, ' ').trim();
 
+  // Fix OCR slash-quantity: normalize spaced slashes "0 / 13" → "0/13"
+  // so the deliverSlashRegex downstream can correctly capture the total after the slash.
+  text = text.replace(/(\d)\s*\/\s*(\d)/g, '$1/$2');
+
+  // Star Citizen OCR artifact fix:
+  // The game UI renders progress as "0/13 SCU". Tesseract misreads the slash as "7"
+  // and drops the leading "0", producing "713 SCU" instead of "0/13 SCU".
+  // The "7" IS the mangled slash — the true quantity is the 2 digits after it.
+  // Fix: rewrite "Deliver 7NN SCU" → "Deliver 0/NN SCU" so the slash-regex extracts NN correctly.
+  // Scoped to exactly 2-digit suffixes (01-99) to avoid mangling real 700+ SCU quantities.
+  text = text.replace(
+    /\bDeliver\s+7([0-9]{2})\s+SCU\b/gi,
+    (m, nn) => `Deliver 0/${nn} SCU`
+  );
+
   return text;
 }
 
@@ -218,19 +302,34 @@ function parsePrimaryObjectivesText(rawText) {
   const tasks = [];
   const pendingDelivers = [];
 
-  const deliverRegex = /^Deliver\s+(?:0\s*\/\s*)?(\d{1,4})\s*SCU\s+of\s+([A-Za-z0-9 '\-]+?)\s+to\s+(.+)$/i;
+  // Priority 1: "Deliver X/Y SCU of ITEM to LOCATION" — always use Y (total after slash)
+  const deliverSlashRegex = /^Deliver\s+\d+\s*\/\s*(\d{1,4})\s*SCU\s+of\s+([A-Za-z0-9 '\-]+?)\s+to\s+(.+)$/i;
+  // Priority 2: "Deliver N SCU of ITEM to LOCATION" — plain number
+  const deliverRegex = /^Deliver\s+(\d{1,4})\s*SCU\s+of\s+([A-Za-z0-9 '\-]+?)\s+to\s+(.+)$/i;
   const collectRegex = /^Collect\s+([A-Za-z0-9 '\-]+?)\s+from\s+(.+)$/i;
 
   for (const fragment of fragments) {
     if (fragment.toLowerCase().startsWith("deliver")) {
-      const match = fragment.match(deliverRegex);
-      if (match) {
+      // Priority 1: "Deliver X/Y SCU of ITEM to LOCATION" — always use the total after the slash
+      const slashMatch = fragment.match(deliverSlashRegex);
+      if (slashMatch) {
         pendingDelivers.push({
-          quantity: parseInt(match[1], 10),
-          itemName: cleanItemName(match[2]),
-          dropoffStation: cleanDropoffLocation(match[3]),
+          quantity: parseInt(slashMatch[1], 10),
+          itemName: cleanItemName(slashMatch[2]),
+          dropoffStation: cleanDropoffLocation(slashMatch[3]),
           collects: []
         });
+      } else {
+        // Priority 2: plain "Deliver N SCU of ITEM to LOCATION"
+        const match = fragment.match(deliverRegex);
+        if (match) {
+          pendingDelivers.push({
+            quantity: parseInt(match[1], 10),
+            itemName: cleanItemName(match[2]),
+            dropoffStation: cleanDropoffLocation(match[3]),
+            collects: []
+          });
+        }
       }
     } else if (fragment.toLowerCase().startsWith("collect")) {
       const match = fragment.match(collectRegex);
@@ -296,19 +395,53 @@ function parsePrimaryObjectivesText(rawText) {
 // ----------------------------------------------------
 function addTask(task) {
   const data = getManifest();
-  data.tasks.push(task);
+  let manualMission = data.missions.find(m => m.id === "mission_manual");
+  if (!manualMission) {
+    manualMission = {
+      id: "mission_manual",
+      title: "Manual Tasks",
+      createdAt: new Date().toISOString(),
+      source: "manual",
+      tasks: []
+    };
+    data.missions.push(manualMission);
+  }
+  manualMission.tasks.push(task);
   saveManifest(data);
 }
 
 function deleteTask(id) {
-  const data = getManifest();
-  data.tasks = data.tasks.filter(t => t.id !== id);
-  saveManifest(data);
+  if (confirm("Are you sure you want to delete this task?")) {
+    const data = getManifest();
+    let missionToDel = null;
+    
+    data.missions.forEach(m => {
+      const initialLen = m.tasks.length;
+      m.tasks = m.tasks.filter(t => t.id !== id);
+      if (m.tasks.length === 0 && initialLen > 0) {
+        missionToDel = m.id;
+      }
+    });
+    
+    if (missionToDel) {
+      data.missions = data.missions.filter(m => m.id !== missionToDel);
+    }
+    
+    saveManifest(data);
+  }
+}
+
+function deleteMission(missionId) {
+  if (confirm("Are you sure you want to delete this entire mission and all of its tasks?")) {
+    const data = getManifest();
+    data.missions = data.missions.filter(m => m.id !== missionId);
+    saveManifest(data);
+  }
 }
 
 function clearManifest() {
   if (confirm("Are you sure you want to clear the entire manifest?")) {
-    saveManifest({ tasks: [], dropoffCargoNotes: {} });
+    saveManifest({ missions: [], dropoffCargoNotes: {}, selectedCargoGridId: null, showDeliveredTasks: false });
   }
 }
 
@@ -321,11 +454,13 @@ function updateDropoffNote(station, note) {
 function markPickupGroupLoaded(pickupStation) {
   const data = getManifest();
   let changed = false;
-  data.tasks.forEach(t => {
-    if (t.pickupStation === pickupStation && t.status === "pending") {
-      t.status = "loaded";
-      changed = true;
-    }
+  data.missions.forEach(m => {
+    m.tasks.forEach(t => {
+      if (t.pickupStation === pickupStation && t.status === "pending") {
+        t.status = "loaded";
+        changed = true;
+      }
+    });
   });
   if (changed) saveManifest(data);
 }
@@ -333,11 +468,13 @@ function markPickupGroupLoaded(pickupStation) {
 function markDropoffGroupDelivered(dropoffStation) {
   const data = getManifest();
   let changed = false;
-  data.tasks.forEach(t => {
-    if (t.dropoffStation === dropoffStation && t.status === "loaded") {
-      t.status = "delivered";
-      changed = true;
-    }
+  data.missions.forEach(m => {
+    m.tasks.forEach(t => {
+      if (t.dropoffStation === dropoffStation && t.status === "loaded") {
+        t.status = "delivered";
+        changed = true;
+      }
+    });
   });
   if (changed) saveManifest(data);
 }
@@ -370,7 +507,7 @@ export function renderManifestPage() {
     </div>
 
     <!-- Stats -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="manifest-stats-container">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4" id="manifest-stats-container">
       <!-- Injected -->
     </div>
 
@@ -469,29 +606,9 @@ export function renderManifestPage() {
         </div>
       </div>
 
-      <!-- Center Panel: Table -->
-      <div class="xl:col-span-2 veldex-panel flex flex-col p-6 min-h-0">
-        <div class="flex items-center justify-between mb-4 border-b border-line pb-3 shrink-0">
-          <h3 class="text-[12px] font-display font-black text-white uppercase tracking-[0.2em]">All Cargo Tasks</h3>
-        </div>
-        <div class="overflow-x-auto veldex-scroll border border-line rounded-sm flex-1">
-          <table class="veldex-table min-w-full">
-            <thead>
-              <tr>
-                <th>ITEM</th>
-                <th>QTY</th>
-                <th>PICKUP</th>
-                <th>DROP-OFF</th>
-                <th>STATUS</th>
-                <th>ZONE</th>
-                <th class="text-right">ACT</th>
-              </tr>
-            </thead>
-            <tbody id="manifest-tasks-body">
-              <!-- Injected -->
-            </tbody>
-          </table>
-        </div>
+      <!-- Center Panel: Missions List -->
+      <div id="manifest-missions-container" class="xl:col-span-2 flex flex-col gap-6 min-h-0">
+        <!-- Dynamically injected mission cards -->
       </div>
     </div>
 
@@ -703,6 +820,7 @@ export function bindManifestEvents() {
   const ocrClearBtn = $("manifest-ocr-clear-btn");
 
   let detectedTasks = [];
+  let editingDetectedTaskId = null;
 
   const processOcrImage = async (file) => {
     if (!file) return;
@@ -726,19 +844,7 @@ export function bindManifestEvents() {
     if (ocrFileInput) ocrFileInput.value = "";
   };
 
-  const detectTasksFromText = () => {
-    const text = ocrTextarea.value;
-    if (!text.trim()) return;
-    
-    const { tasks, normText, fragments } = parsePrimaryObjectivesText(text);
-    detectedTasks = tasks;
-    
-    const debugNorm = $("manifest-ocr-debug-norm");
-    const debugFrag = $("manifest-ocr-debug-frag");
-    
-    if (debugNorm) debugNorm.textContent = normText;
-    if (debugFrag) debugFrag.textContent = JSON.stringify(fragments, null, 2);
-
+  const renderDetectedTasks = () => {
     if (detectedTasks.length > 0) {
       ocrStatus.textContent = `Status: OCR complete — ${detectedTasks.length} tasks detected`;
       ocrError.classList.add("hidden");
@@ -753,23 +859,172 @@ export function bindManifestEvents() {
           warnings.push(t.warningMsg);
         }
         const warningStr = warnings.length > 0 ? `<span class="bg-red-500/20 text-red-400 px-1 py-0.5 rounded text-[9px] uppercase tracking-wider font-bold">${escapeHtml(warnings.join(", "))}</span>` : '';
-        const pickups = t.uncertain && t.pickupStations.length > 0 ? escapeHtml(t.pickupStations.join(", ")) : escapeHtml(t.pickupStation);
-        return `
-          <div class="bg-bg/50 border border-line rounded p-2 text-[11px] font-sans text-muted space-y-1">
-            <div class="flex justify-between items-center text-white font-bold">
-              <span>${escapeHtml(String(t.quantity))} SCU ${escapeHtml(t.itemName)}</span>
-              ${warningStr}
+        
+        if (t.id === editingDetectedTaskId) {
+          // Editing mode for detected task
+          return `
+            <div class="bg-accent/5 border border-accent/30 rounded p-3 text-[11px] font-sans text-white space-y-3">
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block mb-1 text-[9px] uppercase text-muted">Item Name</label>
+                  <input type="text" id="edit-det-item-${t.id}" value="${escapeHtml(t.itemName)}" class="veldex-input py-1 px-2 text-xs w-full bg-bg text-white">
+                </div>
+                <div>
+                  <label class="block mb-1 text-[9px] uppercase text-muted">Quantity</label>
+                  <div class="flex gap-1 items-center">
+                    <input type="number" id="edit-det-qty-${t.id}" value="${t.quantity}" min="0" class="veldex-input py-1 px-2 text-xs w-full bg-bg text-white font-mono">
+                    <select id="edit-det-unit-${t.id}" class="veldex-select py-1 px-2 text-xs h-7 bg-bg border border-line text-white">
+                      <option value="SCU" ${(t.unit || "SCU").toUpperCase() === "SCU" ? "selected" : ""}>SCU</option>
+                      <option value="unit" ${(t.unit || "SCU").toUpperCase() !== "SCU" ? "selected" : ""}>unit</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block mb-1 text-[9px] uppercase text-muted">Pickup Station</label>
+                  <input type="text" id="edit-det-pickup-${t.id}" value="${escapeHtml(t.pickupStation)}" class="veldex-input py-1 px-2 text-xs w-full bg-bg text-white">
+                </div>
+                <div>
+                  <label class="block mb-1 text-[9px] uppercase text-muted">Drop-off Station</label>
+                  <input type="text" id="edit-det-dropoff-${t.id}" value="${escapeHtml(t.dropoffStation)}" class="veldex-input py-1 px-2 text-xs w-full bg-bg text-white">
+                </div>
+              </div>
+              <div>
+                <label class="block mb-1 text-[9px] uppercase text-muted">Notes</label>
+                <input type="text" id="edit-det-notes-${t.id}" value="${escapeHtml(t.notes || '')}" placeholder="Add notes..." class="veldex-input py-1 px-2 text-xs w-full bg-bg text-white">
+              </div>
+              <div class="flex gap-2 justify-end">
+                <button class="det-save-btn bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest transition-colors" data-id="${t.id}">Save</button>
+                <button class="det-cancel-btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest transition-colors" data-id="${t.id}">Cancel</button>
+              </div>
             </div>
-            <div><span class="text-accent/60">From:</span> ${pickups}</div>
-            <div><span class="text-accent/60">To:</span> ${escapeHtml(t.dropoffStation)}</div>
-          </div>
-        `;
+          `;
+        } else {
+          // Normal mode for detected task
+          const displayUnit = t.unit || "SCU";
+          const displayNotes = t.notes ? `<div class="text-[10px] text-accent/80 italic font-sans"><span class="text-accent/60 font-bold">Notes:</span> ${escapeHtml(t.notes)}</div>` : '';
+          const pickups = t.uncertain && t.pickupStations.length > 0 ? escapeHtml(t.pickupStations.join(", ")) : escapeHtml(t.pickupStation);
+          return `
+            <div class="bg-bg/50 border border-line rounded p-3 text-[11px] font-sans text-muted space-y-2 relative">
+              <div class="flex justify-between items-center text-white font-bold">
+                <span>${escapeHtml(String(t.quantity))} ${escapeHtml(displayUnit)} ${escapeHtml(t.itemName)}</span>
+                <div class="flex items-center gap-1">
+                  ${warningStr}
+                  <button class="det-edit-btn text-accent hover:text-accent/80 p-1 transition-opacity" data-id="${t.id}" title="Edit Task">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  </button>
+                  <button class="det-del-btn text-red-500 hover:text-red-400 p-1 transition-opacity" data-id="${t.id}" title="Delete Task">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div><span class="text-accent/60 font-medium">From:</span> ${pickups}</div>
+              <div><span class="text-accent/60 font-medium">To:</span> ${escapeHtml(t.dropoffStation)}</div>
+              ${displayNotes}
+            </div>
+          `;
+        }
       }).join("");
+
+      // Bind actions for detected tasks
+      ocrPreviewList.querySelectorAll(".det-edit-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          editingDetectedTaskId = e.currentTarget.dataset.id;
+          renderDetectedTasks();
+        });
+      });
+
+      ocrPreviewList.querySelectorAll(".det-cancel-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          editingDetectedTaskId = null;
+          renderDetectedTasks();
+        });
+      });
+
+      ocrPreviewList.querySelectorAll(".det-save-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = e.currentTarget.dataset.id;
+          const itemInput = document.getElementById(`edit-det-item-${id}`);
+          const qtyInput = document.getElementById(`edit-det-qty-${id}`);
+          const unitInput = document.getElementById(`edit-det-unit-${id}`);
+          const pickupInput = document.getElementById(`edit-det-pickup-${id}`);
+          const dropoffInput = document.getElementById(`edit-det-dropoff-${id}`);
+          const notesInput = document.getElementById(`edit-det-notes-${id}`);
+
+          if (!itemInput || !qtyInput || !unitInput || !pickupInput || !dropoffInput || !notesInput) return;
+
+          const itemName = itemInput.value.trim();
+          let quantity = parseFloat(qtyInput.value.trim());
+          const unit = unitInput.value;
+          const pickupStation = pickupInput.value.trim();
+          const dropoffStation = dropoffInput.value.trim();
+          const notes = notesInput.value.trim();
+
+          // Validation
+          if (isNaN(quantity) || quantity < 0) {
+            alert("Quantity must be a valid positive number.");
+            return;
+          }
+
+          if (!itemName || !pickupStation || !dropoffStation) {
+            alert("Item Name, Pickup Station, and Drop-off Station cannot be empty.");
+            return;
+          }
+
+          const task = detectedTasks.find(t => t.id === id);
+          if (task) {
+            task.itemName = itemName;
+            task.quantity = quantity;
+            task.unit = unit;
+            task.pickupStation = pickupStation;
+            task.dropoffStation = dropoffStation;
+            task.notes = notes;
+            task.uncertain = false;
+            if (task.pickupStations) {
+              task.pickupStations = [pickupStation];
+            }
+          }
+
+          editingDetectedTaskId = null;
+          renderDetectedTasks();
+        });
+      });
+
+      ocrPreviewList.querySelectorAll(".det-del-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = e.currentTarget.dataset.id;
+          if (confirm("Are you sure you want to delete this detected task?")) {
+            detectedTasks = detectedTasks.filter(t => t.id !== id);
+            renderDetectedTasks();
+          }
+        });
+      });
     } else {
       ocrStatus.textContent = "Status: No tasks detected";
       ocrPreviewContainer.classList.add("hidden");
       ocrError.classList.remove("hidden");
     }
+  };
+
+  const detectTasksFromText = () => {
+    const text = ocrTextarea.value;
+    if (!text.trim()) return;
+    
+    const { tasks, normText, fragments } = parsePrimaryObjectivesText(text);
+    detectedTasks = tasks.map((t, idx) => ({
+      id: t.id || `detected_${Date.now()}_${idx}`,
+      ...t
+    }));
+    
+    const debugNorm = $("manifest-ocr-debug-norm");
+    const debugFrag = $("manifest-ocr-debug-frag");
+    
+    if (debugNorm) debugNorm.textContent = normText;
+    if (debugFrag) debugFrag.textContent = JSON.stringify(fragments, null, 2);
+
+    editingDetectedTaskId = null;
+    renderDetectedTasks();
   };
 
   if (ocrUploadBtn && ocrFileInput) {
@@ -829,7 +1084,37 @@ export function bindManifestEvents() {
     ocrAddBtn.addEventListener("click", () => {
       if (detectedTasks.length > 0) {
         const data = getManifest();
-        data.tasks.push(...detectedTasks);
+        
+        // Map to final task_... IDs on import
+        const formattedTasks = detectedTasks.map(t => ({
+          ...t,
+          id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          status: t.status || "pending",
+          cargoZoneId: t.cargoZoneId || "",
+          notes: t.notes || ""
+        }));
+        
+        // Calculate the next mission number sequentially
+        let maxNum = 0;
+        data.missions.forEach(m => {
+          const match = m.title.match(/Mission\s+#(\d+)/i);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNum) maxNum = num;
+          }
+        });
+        const nextNum = maxNum + 1;
+        const missionTitle = `Mission #${nextNum.toString().padStart(3, "0")}`;
+        
+        const newMission = {
+          id: `mission_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          title: missionTitle,
+          createdAt: new Date().toISOString(),
+          source: "ocr",
+          tasks: formattedTasks
+        };
+        
+        data.missions.push(newMission);
         saveManifest(data);
         
         detectedTasks = [];
@@ -843,6 +1128,7 @@ export function bindManifestEvents() {
   if (ocrClearBtn) {
     ocrClearBtn.addEventListener("click", () => {
       detectedTasks = [];
+      editingDetectedTaskId = null;
       ocrPreviewContainer.classList.add("hidden");
       ocrStatus.textContent = "Status: Idle";
     });
@@ -863,15 +1149,22 @@ export function bindManifestEvents() {
 
 function updateManifestUI() {
   const data = getManifest();
-  const tasks = data.tasks;
+  const tasks = getAllTasks(data);
 
   // Stats
   let totalScu = 0;
+  let totalUnits = 0;
   const pickups = new Set();
   const dropoffs = new Set();
 
   tasks.forEach(t => {
-    totalScu += t.quantity;
+    const qty = parseFloat(t.quantity) || 0;
+    const unit = (t.unit || "SCU").trim().toLowerCase();
+    if (unit === "scu") {
+      totalScu += qty;
+    } else {
+      totalUnits += qty;
+    }
     if (t.pickupStation !== "Multiple pickups") pickups.add(t.pickupStation);
     if (t.pickupStations) t.pickupStations.forEach(ps => pickups.add(ps));
     dropoffs.add(t.dropoffStation);
@@ -879,8 +1172,12 @@ function updateManifestUI() {
 
   const statsHtml = `
     <div class="bg-panel border border-line rounded-sm p-4 flex flex-col justify-center">
-      <p class="text-[10px] font-display font-semibold text-muted uppercase tracking-widest">Total Volume</p>
+      <p class="text-[10px] font-display font-semibold text-muted uppercase tracking-widest">Total SCU</p>
       <p class="text-2xl font-display font-bold text-accent">${totalScu} <span class="text-sm">SCU</span></p>
+    </div>
+    <div class="bg-panel border border-line rounded-sm p-4 flex flex-col justify-center">
+      <p class="text-[10px] font-display font-semibold text-muted uppercase tracking-widest">Total Units</p>
+      <p class="text-2xl font-display font-bold text-accent2">${totalUnits} <span class="text-sm">units</span></p>
     </div>
     <div class="bg-panel border border-line rounded-sm p-4 flex flex-col justify-center">
       <p class="text-[10px] font-display font-semibold text-muted uppercase tracking-widest">Pickups</p>
@@ -894,43 +1191,241 @@ function updateManifestUI() {
       <p class="text-[10px] font-display font-semibold text-muted uppercase tracking-widest">Tasks</p>
       <p class="text-2xl font-display font-bold text-white">${tasks.length}</p>
     </div>
+    <div class="bg-panel border border-line rounded-sm p-4 flex flex-col justify-center">
+      <p class="text-[10px] font-display font-semibold text-muted uppercase tracking-widest">Missions</p>
+      <p class="text-2xl font-display font-bold text-white">${data.missions.length}</p>
+    </div>
   `;
   const statsContainer = $("manifest-stats-container");
   if (statsContainer) statsContainer.innerHTML = statsHtml;
 
-  // Table
-  const tbody = $("manifest-tasks-body");
-  if (tbody) {
-    if (tasks.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-muted font-display uppercase tracking-widest opacity-50">No cargo tasks recorded</td></tr>`;
+  // Missions List Rendering
+  const missionsContainer = $("manifest-missions-container");
+  if (missionsContainer) {
+    if (data.missions.length === 0) {
+      missionsContainer.innerHTML = `
+        <div class="veldex-panel flex flex-col p-6 min-h-0 items-center justify-center py-12 text-center text-muted font-display uppercase tracking-widest opacity-50 border border-line">
+          No cargo missions recorded
+        </div>
+      `;
     } else {
-      tbody.innerHTML = tasks.map(t => {
-        const warning = t.uncertain ? `<span class="text-red-400 font-bold ml-1" title="Multiple pickups detected for this deliver. Quantity not split.">(!)</span>` : '';
-        return `
-        <tr>
-          <td class="font-bold text-white">${t.itemName}</td>
-          <td class="font-mono text-accent">${t.quantity} <span class="text-[10px]">SCU</span></td>
-          <td class="text-muted/80">${t.pickupStation}${warning}</td>
-          <td class="text-muted/80">${t.dropoffStation}</td>
-          <td>
-             <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest ${t.status === 'pending' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-400' : (t.status === 'loaded' ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400' : 'bg-green-500/10 border border-green-500/20 text-green-400')}">${t.status}</span>
-          </td>
-          <td>
-             <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest ${t.cargoZoneId ? 'bg-accent/10 border border-accent/20 text-accent' : 'bg-bg border border-line text-muted'}">${escapeHtml(getZoneNameById(t.cargoZoneId))}</span>
-          </td>
-          <td class="text-right">
-            <button class="manifest-del-btn text-red-500 hover:text-red-400 p-1" data-id="${t.id}" title="Delete Task">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-            </button>
-          </td>
-        </tr>
-      `}).join("");
+      missionsContainer.innerHTML = data.missions.map(m => {
+        // Calculate mission-level stats
+        let missionScu = 0;
+        let missionUnits = 0;
+        m.tasks.forEach(t => {
+          const qty = parseFloat(t.quantity) || 0;
+          const unit = (t.unit || "SCU").trim().toLowerCase();
+          if (unit === "scu") {
+            missionScu += qty;
+          } else {
+            missionUnits += qty;
+          }
+        });
 
-      // Bind delete
+        const rowsHtml = m.tasks.map(t => {
+          if (t.id === editingTaskId) {
+            // Editing mode
+            return `
+            <tr class="bg-accent/5 border-b border-accent/20">
+              <td>
+                <input type="text" id="edit-item-${t.id}" value="${escapeHtml(t.itemName)}" class="veldex-input py-1 px-2 text-xs w-full font-bold text-white bg-bg">
+              </td>
+              <td>
+                <div class="flex gap-1 items-center">
+                  <input type="number" id="edit-qty-${t.id}" value="${t.quantity}" min="0" class="veldex-input py-1 px-2 text-xs w-16 font-mono text-accent bg-bg">
+                  <select id="edit-unit-${t.id}" class="veldex-select py-1 px-2 text-xs h-7 bg-bg border border-line text-white">
+                    <option value="SCU" ${(t.unit || "SCU").toUpperCase() === "SCU" ? "selected" : ""}>SCU</option>
+                    <option value="unit" ${(t.unit || "SCU").toUpperCase() !== "SCU" ? "selected" : ""}>unit</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <input type="text" id="edit-pickup-${t.id}" value="${escapeHtml(t.pickupStation)}" class="veldex-input py-1 px-2 text-xs w-full bg-bg">
+              </td>
+              <td>
+                <input type="text" id="edit-dropoff-${t.id}" value="${escapeHtml(t.dropoffStation)}" class="veldex-input py-1 px-2 text-xs w-full bg-bg">
+              </td>
+              <td>
+                <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest ${t.status === 'pending' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-400' : (t.status === 'loaded' ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400' : 'bg-green-500/10 border border-green-500/20 text-green-400')}">${t.status}</span>
+              </td>
+              <td>
+                <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest ${t.cargoZoneId ? 'bg-accent/10 border border-accent/20 text-accent' : 'bg-bg border border-line text-muted'}">${escapeHtml(getZoneNameById(t.cargoZoneId))}</span>
+              </td>
+              <td>
+                <input type="text" id="edit-notes-${t.id}" value="${escapeHtml(t.notes || '')}" placeholder="Add notes..." class="veldex-input py-1 px-2 text-xs w-full bg-bg">
+              </td>
+              <td class="text-right">
+                <div class="flex gap-1 justify-end">
+                  <button class="manifest-save-btn bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest transition-colors" data-id="${t.id}">Save</button>
+                  <button class="manifest-cancel-btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest transition-colors" data-id="${t.id}">Cancel</button>
+                </div>
+              </td>
+            </tr>
+            `;
+          } else {
+            // Normal mode
+            const warning = t.uncertain ? `<span class="text-red-400 font-bold ml-1" title="Multiple pickups detected for this deliver. Quantity not split.">(!)</span>` : '';
+            const displayUnit = t.unit || "SCU";
+            return `
+            <tr>
+              <td class="font-bold text-white">${escapeHtml(t.itemName)}</td>
+              <td class="font-mono text-accent">${t.quantity} <span class="text-[10px]">${escapeHtml(displayUnit)}</span></td>
+              <td class="text-muted/80">${escapeHtml(t.pickupStation)}${warning}</td>
+              <td class="text-muted/80">${escapeHtml(t.dropoffStation)}</td>
+              <td>
+                 <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest ${t.status === 'pending' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-400' : (t.status === 'loaded' ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400' : 'bg-green-500/10 border border-green-500/20 text-green-400')}">${t.status}</span>
+              </td>
+              <td>
+                 <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest ${t.cargoZoneId ? 'bg-accent/10 border border-accent/20 text-accent' : 'bg-bg border border-line text-muted'}">${escapeHtml(getZoneNameById(t.cargoZoneId))}</span>
+              </td>
+              <td class="text-muted/80 font-sans text-xs">${t.notes ? escapeHtml(t.notes) : '<span class="text-muted/40 italic">-</span>'}</td>
+              <td class="text-right">
+                <div class="flex gap-1 justify-end">
+                  <button class="manifest-edit-btn text-accent hover:text-accent/80 p-1" data-id="${t.id}" title="Edit Task">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  </button>
+                  <button class="manifest-del-btn text-red-500 hover:text-red-400 p-1" data-id="${t.id}" title="Delete Task">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            `;
+          }
+        }).join("");
+
+        return `
+          <div class="veldex-panel flex flex-col p-6 min-h-0 relative">
+            <!-- Mission Header -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 border-b border-line pb-3 shrink-0 gap-3">
+              <div class="flex flex-col">
+                <div class="flex items-center gap-3">
+                  <h3 class="text-sm font-display font-black text-white uppercase tracking-[0.2em]">${escapeHtml(m.title)}</h3>
+                  <span class="bg-accent/10 border border-accent/20 text-accent px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold">${escapeHtml(m.source || 'ocr')}</span>
+                </div>
+                <span class="text-[9px] text-muted font-sans mt-0.5">${new Date(m.createdAt).toLocaleString()}</span>
+              </div>
+              <div class="flex items-center gap-3 self-end sm:self-auto">
+                <div class="flex items-center gap-2 text-[10px] font-mono text-muted bg-bg px-3 py-1 rounded border border-line">
+                  <span>${m.tasks.length} tasks</span>
+                  <span>&middot;</span>
+                  <span class="text-accent">${missionScu} SCU</span>
+                  <span>&middot;</span>
+                  <span class="text-accent2">${missionUnits} units</span>
+                </div>
+                <button class="manifest-delete-mission-btn text-red-500 hover:text-red-400 p-1 transition-colors ml-1" data-mission-id="${m.id}" title="Delete Mission">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto veldex-scroll border border-line rounded-sm flex-1">
+              <table class="veldex-table min-w-full">
+                <thead>
+                  <tr>
+                    <th>ITEM</th>
+                    <th>QTY</th>
+                    <th>PICKUP</th>
+                    <th>DROP-OFF</th>
+                    <th>STATUS</th>
+                    <th>ZONE</th>
+                    <th>NOTES</th>
+                    <th class="text-right">ACT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rowsHtml}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      // Bind action listeners (Edit, Cancel, Save, Delete, Delete Mission)
+      document.querySelectorAll(".manifest-edit-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          editingTaskId = e.currentTarget.dataset.id;
+          updateManifestUI();
+        });
+      });
+
+      document.querySelectorAll(".manifest-cancel-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          editingTaskId = null;
+          updateManifestUI();
+        });
+      });
+
+      document.querySelectorAll(".manifest-save-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = e.currentTarget.dataset.id;
+          
+          const itemInput = document.getElementById(`edit-item-${id}`);
+          const qtyInput = document.getElementById(`edit-qty-${id}`);
+          const unitInput = document.getElementById(`edit-unit-${id}`);
+          const pickupInput = document.getElementById(`edit-pickup-${id}`);
+          const dropoffInput = document.getElementById(`edit-dropoff-${id}`);
+          const notesInput = document.getElementById(`edit-notes-${id}`);
+          
+          if (!itemInput || !qtyInput || !unitInput || !pickupInput || !dropoffInput || !notesInput) return;
+          
+          const itemName = itemInput.value.trim();
+          let quantity = parseFloat(qtyInput.value.trim());
+          const unit = unitInput.value;
+          const pickupStation = pickupInput.value.trim();
+          const dropoffStation = dropoffInput.value.trim();
+          const notes = notesInput.value.trim();
+          
+          // Validation:
+          if (isNaN(quantity) || quantity < 0) {
+            alert("Quantity must be a valid positive number.");
+            return;
+          }
+          
+          if (!itemName || !pickupStation || !dropoffStation) {
+            alert("Item Name, Pickup Station, and Drop-off Station cannot be empty.");
+            return;
+          }
+          
+          const data = getManifest();
+          // Find task in missions
+          let foundTask = null;
+          for (const m of data.missions) {
+            const task = m.tasks.find(t => t.id === id);
+            if (task) {
+              foundTask = task;
+              break;
+            }
+          }
+          if (foundTask) {
+            foundTask.itemName = itemName;
+            foundTask.quantity = quantity;
+            foundTask.unit = unit;
+            foundTask.pickupStation = pickupStation;
+            foundTask.dropoffStation = dropoffStation;
+            foundTask.notes = notes;
+            saveManifest(data);
+          }
+          
+          editingTaskId = null;
+          updateManifestUI();
+        });
+      });
+
       document.querySelectorAll(".manifest-del-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
           const id = e.currentTarget.dataset.id;
           deleteTask(id);
+        });
+      });
+
+      document.querySelectorAll(".manifest-delete-mission-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = e.currentTarget.dataset.missionId;
+          deleteMission(id);
         });
       });
     }
@@ -981,7 +1476,7 @@ function updateManifestUI() {
               <li class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[12px] font-sans">
                 <div class="flex items-center gap-2 flex-1 min-w-0">
                   <span class="w-1.5 h-1.5 bg-accent2/50 rounded-full shrink-0"></span>
-                  <span class="text-white whitespace-nowrap">${t.quantity} SCU ${t.itemName}</span>
+                  <span class="text-white whitespace-nowrap">${t.quantity} ${escapeHtml(t.unit || 'SCU')} ${t.itemName}</span>
                   <span class="text-muted/60 flex items-center gap-1 ml-1 truncate">
                     <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="m9 18 6-6-6-6"/></svg>
                     <span class="truncate">${t.dropoffStation}</span>
@@ -1099,7 +1594,7 @@ function updateManifestUI() {
               <li class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[12px] font-sans">
                 <div class="flex items-center gap-2 flex-1 min-w-0">
                   <span class="w-1.5 h-1.5 bg-green-400/50 rounded-full shrink-0"></span>
-                  <span class="text-white whitespace-nowrap">${t.quantity} SCU ${t.itemName}</span>
+                  <span class="text-white whitespace-nowrap">${t.quantity} ${escapeHtml(t.unit || 'SCU')} ${t.itemName}</span>
                   <span class="text-muted/60 flex items-center gap-1 ml-1 truncate">
                     <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="m9 18 6-6-6-6"/></svg>
                     <span class="truncate">${t.pickupStation}</span>
@@ -1141,7 +1636,9 @@ function updateManifestUI() {
       } else {
         const totalCapacityScu = activeZones.reduce((sum, z) => sum + parseFloat(z.capacity_scu), 0);
         const gridZoneIds = new Set(activeZones.map(z => z.id));
-        const totalLoadedScu = tasks.filter(t => gridZoneIds.has(t.cargoZoneId)).reduce((sum, t) => sum + t.quantity, 0);
+        const totalLoadedScu = tasks
+          .filter(t => gridZoneIds.has(t.cargoZoneId) && (t.unit || "SCU").trim().toLowerCase() === "scu")
+          .reduce((sum, t) => sum + parseFloat(t.quantity || 0), 0);
         
         const pct = totalCapacityScu > 0 ? Math.round((totalLoadedScu / totalCapacityScu) * 100) : 0;
         const isGridOver = totalLoadedScu > totalCapacityScu;
@@ -1155,7 +1652,9 @@ function updateManifestUI() {
         
         zonesHtml = activeZones.map(z => {
           const tasksInZone = tasks.filter(t => t.cargoZoneId === z.id);
-          const usedScu = tasksInZone.reduce((sum, t) => sum + t.quantity, 0);
+          const usedScu = tasksInZone
+            .filter(t => (t.unit || "SCU").trim().toLowerCase() === "scu")
+            .reduce((sum, t) => sum + parseFloat(t.quantity || 0), 0);
           const capacity = parseFloat(z.capacity_scu);
           const isOver = usedScu > capacity;
           
