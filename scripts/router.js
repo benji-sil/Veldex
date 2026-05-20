@@ -8,7 +8,8 @@ const VIEW_TITLES = {
   "view-corporation": ["Corporation", "Membres et Invitations"],
   "view-tools": ["Tools", "Data & Resources"],
   "view-manifest": ["Cargo Manifest", "Organize hauling missions"],
-  "view-cargo-grids": ["Cargo Grids", "Custom Ship Layouts"]
+  "view-cargo-grids": ["Cargo Grids", "Custom Ship Layouts"],
+  "view-blueprints": ["Blueprint Registry", "Corporation blueprint ownership directory"]
 };
 
 // ==================================================

@@ -14,6 +14,10 @@ import {
 } from "../pages/corp.js";
 
 import {
+  renderBlueprintsPage, bindBlueprintsEvents
+} from "../pages/corporation/blueprints.js";
+
+import {
   bindUexTest, loadInventoryEntries, bindInventoryEntriesFilters, bindOcr
 } from "../pages/inventory.js";
 
@@ -62,6 +66,7 @@ async function initDashboardPage() {
   renderToolsPage();
   renderManifestPage();
   renderCargoGridsPage();
+  renderBlueprintsPage();
   initNavigation();
   
   // Fetch game versions and update sidebar once done
@@ -75,6 +80,7 @@ async function initDashboardPage() {
   bindInventoryEntriesFilters();
   bindOcr();
   bindManifestEvents();
+  bindBlueprintsEvents();
   
   $("refresh-members")?.addEventListener("click", loadCorporationMembers);
   $("create-corp-btn")?.addEventListener("click", createCorporation);

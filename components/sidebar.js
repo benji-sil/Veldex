@@ -1,4 +1,4 @@
-const VELDEX_VERSION = "v0.1.5.1";
+const VELDEX_VERSION = "v0.1.6.0";
 
 export function updateSidebarVersions() {
   const container = document.getElementById("sidebar-versions-content");
@@ -39,7 +39,8 @@ const navGroups = [
     icon: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-40 group-hover/navbtn:opacity-100 transition-opacity"><path d="M12 2v20"/><path d="m19 9-7 7-7-7"/></svg>',
     items: [
       { label: "Inventory", view: "view-inventory", visible: true },
-      { label: "Corporation", view: "view-corporation", visible: true }
+      { label: "Corporation", view: "view-corporation", visible: true },
+      { label: "Blueprints", view: "view-blueprints", visible: true }
     ]
   },
   {
