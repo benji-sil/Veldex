@@ -8,6 +8,7 @@ let availableGrids = [];
 let activeZones = [];
 let currentLayoutImageUrl = null;
 let editingTaskId = null;
+let lastOcrMetrics = null;
 
 const MANIFEST_KEY = "veldex_cargo_manifest_v1";
 
@@ -131,15 +132,41 @@ function updateTaskZone(taskId, newZoneId) {
 
 function applyZoneToDropoffGroup(dropoffStation, newZoneId) {
   const data = getManifest();
-  let modified = false;
+  const activeTasks = [];
+  let tasksWithDifferentZone = 0;
+
   data.missions.forEach(m => {
-    m.tasks.forEach(t => {
-      if (t.dropoffStation === dropoffStation) {
-        t.cargoZoneId = newZoneId || null;
-        modified = true;
+    (m.tasks || []).forEach(t => {
+      // Exclude delivered tasks to preserve completed drop-offs
+      if (t.dropoffStation === dropoffStation && t.status !== "delivered") {
+        activeTasks.push(t);
+        if (t.cargoZoneId && t.cargoZoneId !== newZoneId) {
+          tasksWithDifferentZone++;
+        }
       }
     });
   });
+
+  if (activeTasks.length === 0) return;
+
+  let overwriteExisting = true;
+  if (tasksWithDifferentZone > 0) {
+    overwriteExisting = confirm(
+      `${tasksWithDifferentZone} marchandise(s) active(s) pour "${dropoffStation}" ont déjà une zone attribuée.\n\n` +
+      `Voulez-vous remplacer les zones existantes ?\n` +
+      `- OK : Remplacer toutes les zones (marchandises livrées exclues)\n` +
+      `- Annuler : Affecter uniquement aux marchandises sans zone`
+    );
+  }
+
+  let modified = false;
+  activeTasks.forEach(t => {
+    if (overwriteExisting || !t.cargoZoneId) {
+      t.cargoZoneId = newZoneId || "";
+      modified = true;
+    }
+  });
+
   if (modified) {
     saveManifest(data);
   }
@@ -236,6 +263,10 @@ function normalizeOcrText(rawText) {
     /\bDeliver\s+7([0-9]{2})\s+SCU\b/gi,
     (m, nn) => `Deliver 0/${nn} SCU`
   );
+  text = text.replace(
+    /\bCollect\s+7([0-9]{2})\s+SCU\b/gi,
+    (m, nn) => `Collect 0/${nn} SCU`
+  );
 
   return text;
 }
@@ -283,6 +314,20 @@ function cleanDropoffLocation(value) {
 function cleanPickupLocation(value) {
   if (!value) return "";
   let loc = value.trim();
+
+  const stopPhrases = [
+    "By the way", "Happy travels", "Chase Hewitt", "Collect", "Deliver",
+    "Contract", "Details", "Primary Objectives", "Accept Offer"
+  ];
+
+  let minIdx = loc.length;
+  for (const phrase of stopPhrases) {
+    const idx = loc.toLowerCase().indexOf(phrase.toLowerCase());
+    if (idx !== -1 && idx < minIdx) {
+      minIdx = idx;
+    }
+  }
+  loc = loc.substring(0, minIdx).trim();
   loc = loc.replace(/[.,;:]+$/, '').trim();
   return loc;
 }
@@ -299,95 +344,257 @@ function parsePrimaryObjectivesText(rawText) {
   const normText = normalizeOcrText(rawText);
   const fragments = extractObjectiveFragments(normText);
 
-  const tasks = [];
-  const pendingDelivers = [];
+  const delivers = [];
+  const collects = [];
+  const unparsedFragments = [];
 
-  // Priority 1: "Deliver X/Y SCU of ITEM to LOCATION" — always use Y (total after slash)
   const deliverSlashRegex = /^Deliver\s+\d+\s*\/\s*(\d{1,4})\s*SCU\s+of\s+([A-Za-z0-9 '\-]+?)\s+to\s+(.+)$/i;
-  // Priority 2: "Deliver N SCU of ITEM to LOCATION" — plain number
-  const deliverRegex = /^Deliver\s+(\d{1,4})\s*SCU\s+of\s+([A-Za-z0-9 '\-]+?)\s+to\s+(.+)$/i;
-  const collectRegex = /^Collect\s+([A-Za-z0-9 '\-]+?)\s+from\s+(.+)$/i;
+  const deliverRegex      = /^Deliver\s+(\d{1,4})\s*SCU\s+of\s+([A-Za-z0-9 '\-]+?)\s+to\s+(.+)$/i;
+  const deliverPlainRegex  = /^Deliver\s+([A-Za-z0-9 '\-]+?)\s+to\s+(.+)$/i;
 
-  for (const fragment of fragments) {
-    if (fragment.toLowerCase().startsWith("deliver")) {
-      // Priority 1: "Deliver X/Y SCU of ITEM to LOCATION" — always use the total after the slash
+  const collectSlashRegex = /^Collect\s+\d+\s*\/\s*(\d{1,4})\s*SCU\s+of\s+([A-Za-z0-9 '\-]+?)\s+from\s+(.+)$/i;
+  const collectRegex      = /^Collect\s+(\d{1,4})\s*SCU\s+of\s+([A-Za-z0-9 '\-]+?)\s+from\s+(.+)$/i;
+  const collectPlainRegex  = /^Collect\s+([A-Za-z0-9 '\-]+?)\s+from\s+(.+)$/i;
+
+  for (let idx = 0; idx < fragments.length; idx++) {
+    const fragment = fragments[idx];
+    const lower = fragment.toLowerCase();
+
+    if (lower.startsWith("deliver")) {
       const slashMatch = fragment.match(deliverSlashRegex);
       if (slashMatch) {
-        pendingDelivers.push({
+        delivers.push({
+          fragIndex: idx,
           quantity: parseInt(slashMatch[1], 10),
           itemName: cleanItemName(slashMatch[2]),
           dropoffStation: cleanDropoffLocation(slashMatch[3]),
-          collects: []
+          hasExplicitQty: true,
+          assignedCollects: [],
+          rawFragment: fragment
         });
       } else {
-        // Priority 2: plain "Deliver N SCU of ITEM to LOCATION"
-        const match = fragment.match(deliverRegex);
-        if (match) {
-          pendingDelivers.push({
-            quantity: parseInt(match[1], 10),
-            itemName: cleanItemName(match[2]),
-            dropoffStation: cleanDropoffLocation(match[3]),
-            collects: []
+        const qtyMatch = fragment.match(deliverRegex);
+        if (qtyMatch) {
+          delivers.push({
+            fragIndex: idx,
+            quantity: parseInt(qtyMatch[1], 10),
+            itemName: cleanItemName(qtyMatch[2]),
+            dropoffStation: cleanDropoffLocation(qtyMatch[3]),
+            hasExplicitQty: true,
+            assignedCollects: [],
+            rawFragment: fragment
           });
-        }
-      }
-    } else if (fragment.toLowerCase().startsWith("collect")) {
-      const match = fragment.match(collectRegex);
-      if (match) {
-        const item = cleanItemName(match[1]);
-        const station = cleanPickupLocation(match[2]);
-        
-        for (let i = pendingDelivers.length - 1; i >= 0; i--) {
-          if (pendingDelivers[i].itemName.toLowerCase() === item.toLowerCase()) {
-            pendingDelivers[i].collects.push(station);
-            break;
+        } else {
+          const plainMatch = fragment.match(deliverPlainRegex);
+          if (plainMatch) {
+            delivers.push({
+              fragIndex: idx,
+              quantity: 0,
+              itemName: cleanItemName(plainMatch[1]),
+              dropoffStation: cleanDropoffLocation(plainMatch[2]),
+              hasExplicitQty: false,
+              assignedCollects: [],
+              rawFragment: fragment
+            });
+          } else {
+            unparsedFragments.push(fragment);
           }
         }
       }
+    } else if (lower.startsWith("collect")) {
+      const slashMatch = fragment.match(collectSlashRegex);
+      if (slashMatch) {
+        collects.push({
+          fragIndex: idx,
+          quantity: parseInt(slashMatch[1], 10),
+          itemName: cleanItemName(slashMatch[2]),
+          pickupStation: cleanPickupLocation(slashMatch[3]),
+          hasExplicitQty: true,
+          matched: false,
+          rawFragment: fragment
+        });
+      } else {
+        const qtyMatch = fragment.match(collectRegex);
+        if (qtyMatch) {
+          collects.push({
+            fragIndex: idx,
+            quantity: parseInt(qtyMatch[1], 10),
+            itemName: cleanItemName(qtyMatch[2]),
+            pickupStation: cleanPickupLocation(qtyMatch[3]),
+            hasExplicitQty: true,
+            matched: false,
+            rawFragment: fragment
+          });
+        } else {
+          const plainMatch = fragment.match(collectPlainRegex);
+          if (plainMatch) {
+            collects.push({
+              fragIndex: idx,
+              quantity: null,
+              itemName: cleanItemName(plainMatch[1]),
+              pickupStation: cleanPickupLocation(plainMatch[2]),
+              hasExplicitQty: false,
+              matched: false,
+              rawFragment: fragment
+            });
+          } else {
+            unparsedFragments.push(fragment);
+          }
+        }
+      }
+    } else {
+      unparsedFragments.push(fragment);
     }
   }
 
-  for (const pd of pendingDelivers) {
+  // Pre-initialize deliver warnings
+  delivers.forEach(d => {
+    d.uncertain = false;
+    d.warnings = [];
+    if (d.quantity > 500) {
+      d.uncertain = true;
+      d.warnings.push("High quantity detected");
+    }
+    if (!d.hasExplicitQty) {
+      d.uncertain = true;
+      d.warnings.push("Missing delivery quantity");
+    }
+  });
+
+  // Association Pass 1: exact item name (case-insensitive) AND exact quantity match
+  delivers.forEach(d => {
+    if (!d.hasExplicitQty) return;
+    const candidates = collects.filter(c =>
+      !c.matched &&
+      c.itemName.toLowerCase() === d.itemName.toLowerCase() &&
+      c.quantity === d.quantity
+    );
+    if (candidates.length === 1) {
+      const c = candidates[0];
+      c.matched = true;
+      d.assignedCollects.push(c);
+    }
+  });
+
+  // Association Pass 2: unique unmatched collect for this item AND unique deliver for this item
+  delivers.forEach(d => {
+    if (d.assignedCollects.length > 0) return;
+    const unmatchedCollects = collects.filter(c => !c.matched && c.itemName.toLowerCase() === d.itemName.toLowerCase());
+    const unassignedDelivers = delivers.filter(d2 => d2.assignedCollects.length === 0 && d2.itemName.toLowerCase() === d.itemName.toLowerCase());
+    if (unmatchedCollects.length === 1 && unassignedDelivers.length === 1) {
+      const c = unmatchedCollects[0];
+      c.matched = true;
+      d.assignedCollects.push(c);
+    }
+  });
+
+  // Association Pass 3: multi-pickup sum match (sum of unmatched collects of this item equals delivery quantity)
+  delivers.forEach(d => {
+    if (d.assignedCollects.length > 0 || !d.hasExplicitQty) return;
+    const unmatchedCollects = collects.filter(c => !c.matched && c.itemName.toLowerCase() === d.itemName.toLowerCase() && c.quantity !== null);
+    if (unmatchedCollects.length > 1) {
+      const sum = unmatchedCollects.reduce((s, c) => s + c.quantity, 0);
+      if (sum === d.quantity) {
+        unmatchedCollects.forEach(c => {
+          c.matched = true;
+          d.assignedCollects.push(c);
+        });
+        d.uncertain = true;
+        d.warnings.push("Multi-pickup split");
+      }
+    }
+  });
+
+  // Association Pass 4: remaining unmatched collects for this item paired by text proximity
+  delivers.forEach(d => {
+    if (d.assignedCollects.length > 0) return;
+    const unmatchedCollects = collects.filter(c => !c.matched && c.itemName.toLowerCase() === d.itemName.toLowerCase());
+    if (unmatchedCollects.length > 0) {
+      // Sort by distance between indices in fragments
+      unmatchedCollects.sort((a, b) => Math.abs(a.fragIndex - d.fragIndex) - Math.abs(b.fragIndex - d.fragIndex));
+      const c = unmatchedCollects[0];
+      c.matched = true;
+      d.assignedCollects.push(c);
+      if (unmatchedCollects.length > 1) {
+        d.uncertain = true;
+        d.warnings.push("Ambiguous pickup association");
+      }
+    }
+  });
+
+  // Construct tasks from delivers
+  const tasks = [];
+  delivers.forEach(d => {
     let pickup = "Unknown pickup";
-    let uncertain = false;
     let pickupStations = [];
 
-    if (pd.collects.length === 1) {
-      pickup = pd.collects[0];
-    } else if (pd.collects.length > 1) {
+    if (d.assignedCollects.length === 1) {
+      pickup = d.assignedCollects[0].pickupStation;
+    } else if (d.assignedCollects.length > 1) {
       pickup = "Multiple pickups";
-      pickupStations = pd.collects;
-      uncertain = true;
-    }
-
-    let warningMsg = null;
-    if (pd.quantity > 500) {
-      uncertain = true;
-      warningMsg = "High quantity detected";
-    }
-    if (pickup === "Unknown pickup") {
-      uncertain = true;
-      warningMsg = warningMsg ? warningMsg + ", Missing pickup" : "Missing pickup";
+      pickupStations = d.assignedCollects.map(c => c.pickupStation);
+      d.uncertain = true;
+      if (!d.warnings.includes("Multiple pickups")) d.warnings.push("Multiple pickups");
+    } else {
+      d.uncertain = true;
+      d.warnings.push("Missing pickup");
     }
 
     tasks.push({
       id: generateId(),
       missionId: "",
       pickupStation: pickup,
-      dropoffStation: pd.dropoffStation,
-      itemName: pd.itemName,
-      quantity: pd.quantity,
+      dropoffStation: d.dropoffStation,
+      itemName: d.itemName,
+      quantity: d.quantity,
       unit: "SCU",
       status: "pending",
       cargoZoneId: "",
-      uncertain: uncertain,
-      warningMsg: warningMsg,
+      uncertain: d.uncertain,
+      warningMsg: d.warnings.length > 0 ? d.warnings.join(", ") : null,
       pickupStations: pickupStations,
       source: "ocr"
     });
-  }
+  });
 
-  return { tasks, normText, fragments };
+  // Preserve unmatched collects as explicit tasks with warning (do not silently discard!)
+  const unmatchedCollects = collects.filter(c => !c.matched);
+  unmatchedCollects.forEach(c => {
+    tasks.push({
+      id: generateId(),
+      missionId: "",
+      pickupStation: c.pickupStation,
+      dropoffStation: "Unknown drop-off",
+      itemName: c.itemName,
+      quantity: c.quantity !== null ? c.quantity : 0,
+      unit: "SCU",
+      status: "pending",
+      cargoZoneId: "",
+      uncertain: true,
+      warningMsg: "Unmatched pickup (missing delivery destination)",
+      pickupStations: [],
+      source: "ocr"
+    });
+  });
+
+  // Calculate detailed summary metrics for validation
+  const quantitiesByItem = {};
+  tasks.forEach(t => {
+    const it = t.itemName || "Unknown";
+    quantitiesByItem[it] = (quantitiesByItem[it] || 0) + (parseFloat(t.quantity) || 0);
+  });
+
+  const metrics = {
+    deliversCount: delivers.length,
+    collectsCount: collects.length,
+    matchedCount: delivers.filter(d => d.assignedCollects.length > 0).length,
+    unmatchedCollectsCount: unmatchedCollects.length,
+    unparsedFragments: unparsedFragments,
+    uncertainCount: tasks.filter(t => t.uncertain).length,
+    quantitiesByItem: quantitiesByItem
+  };
+
+  return { tasks, normText, fragments, metrics };
 }
 
 // ----------------------------------------------------
@@ -467,12 +674,44 @@ function markPickupGroupLoaded(pickupStation) {
 
 function markDropoffGroupDelivered(dropoffStation) {
   const data = getManifest();
+  let loadedCount = 0;
+  let pendingCount = 0;
+
+  data.missions.forEach(m => {
+    (m.tasks || []).forEach(t => {
+      if (t.dropoffStation === dropoffStation) {
+        if (t.status === "loaded") loadedCount++;
+        else if (t.status === "pending") pendingCount++;
+      }
+    });
+  });
+
+  if (loadedCount === 0 && pendingCount === 0) return;
+
+  let includePending = false;
+  if (pendingCount > 0) {
+    if (loadedCount === 0) {
+      includePending = confirm(
+        `Toutes les marchandises (${pendingCount}) pour "${dropoffStation}" sont encore au statut 'pending' (non chargées).\n\n` +
+        `Confirmer leur livraison directe ?`
+      );
+      if (!includePending) return;
+    } else {
+      includePending = confirm(
+        `${pendingCount} marchandise(s) pour "${dropoffStation}" sont encore au statut 'pending' (non chargées).\n\n` +
+        `Voulez-vous aussi les marquer comme livrées avec les marchandises chargées ?`
+      );
+    }
+  }
+
   let changed = false;
   data.missions.forEach(m => {
-    m.tasks.forEach(t => {
-      if (t.dropoffStation === dropoffStation && t.status === "loaded") {
-        t.status = "delivered";
-        changed = true;
+    (m.tasks || []).forEach(t => {
+      if (t.dropoffStation === dropoffStation) {
+        if (t.status === "loaded" || (includePending && t.status === "pending")) {
+          t.status = "delivered";
+          changed = true;
+        }
       }
     });
   });
@@ -578,7 +817,11 @@ export function renderManifestPage() {
               No valid tasks found. Try cropping the screenshot around PRIMARY OBJECTIVES or edit the OCR text manually.
             </div>
             <div id="manifest-ocr-preview-container" class="hidden space-y-4 mt-4 border-t border-line pt-4">
-              <h4 class="text-[12px] font-display font-bold text-white uppercase tracking-[0.1em]">Detected Tasks</h4>
+              <div class="flex items-center justify-between">
+                <h4 class="text-[12px] font-display font-bold text-white uppercase tracking-[0.1em]">Detected Tasks</h4>
+                <span id="manifest-ocr-summary-badge" class="text-[10px] font-mono text-muted"></span>
+              </div>
+              <div id="manifest-ocr-validation-box" class="space-y-2"></div>
               <div id="manifest-ocr-preview-list" class="space-y-2"></div>
               <div class="flex gap-2">
                 <button id="manifest-ocr-add-btn" type="button" class="veldex-btn-primary flex-1 h-11 text-[11px]">ADD DETECTED TASKS</button>
@@ -786,8 +1029,17 @@ export function bindManifestEvents() {
         markPickupGroupLoaded(markBtn.dataset.pickupStation);
       } else if (action === "mark-dropoff-delivered") {
         markDropoffGroupDelivered(markBtn.dataset.dropoffStation);
-      } else if (action === "loaded" || action === "delivered") {
+      } else if (action === "pending" || action === "loaded") {
         updateTaskStatus(markBtn.dataset.id, action);
+      } else if (action === "delivered") {
+        const fromStatus = markBtn.dataset.fromStatus;
+        if (fromStatus === "pending") {
+          if (confirm("Cette marchandise n'est pas marquée comme chargée (statut 'pending'). Confirmer la livraison directe ?")) {
+            updateTaskStatus(markBtn.dataset.id, "delivered");
+          }
+        } else {
+          updateTaskStatus(markBtn.dataset.id, "delivered");
+        }
       }
     }
 
@@ -845,10 +1097,90 @@ export function bindManifestEvents() {
   };
 
   const renderDetectedTasks = () => {
+    const validationBox = $("manifest-ocr-validation-box");
+    const summaryBadge = $("manifest-ocr-summary-badge");
+
     if (detectedTasks.length > 0) {
       ocrStatus.textContent = `Status: OCR complete — ${detectedTasks.length} tasks detected`;
       ocrError.classList.add("hidden");
       ocrPreviewContainer.classList.remove("hidden");
+
+      // Dynamic summary calculations
+      const totalDetScu = detectedTasks
+        .filter(t => (t.unit || "SCU").trim().toLowerCase() === "scu")
+        .reduce((sum, t) => sum + (parseFloat(t.quantity) || 0), 0);
+      const totalDetUnits = detectedTasks
+        .filter(t => (t.unit || "SCU").trim().toLowerCase() !== "scu")
+        .reduce((sum, t) => sum + (parseFloat(t.quantity) || 0), 0);
+
+      const itemBreakdown = {};
+      detectedTasks.forEach(t => {
+        const key = t.itemName || "Inconnu";
+        const unit = (t.unit || "SCU").trim().toUpperCase();
+        if (!itemBreakdown[key]) itemBreakdown[key] = { scu: 0, units: 0 };
+        if (unit === "SCU") itemBreakdown[key].scu += (parseFloat(t.quantity) || 0);
+        else itemBreakdown[key].units += (parseFloat(t.quantity) || 0);
+      });
+
+      const uncertainTasks = detectedTasks.filter(t => t.uncertain);
+      const missingPickups = detectedTasks.filter(t => t.pickupStation === "Unknown pickup");
+      const missingDropoffs = detectedTasks.filter(t => t.dropoffStation === "Unknown drop-off");
+      const unparsed = (lastOcrMetrics && lastOcrMetrics.unparsedFragments) || [];
+
+      if (summaryBadge) {
+        summaryBadge.textContent = `${detectedTasks.length} tâche(s) &middot; ${totalDetScu} SCU${totalDetUnits > 0 ? ` + ${totalDetUnits}u` : ''}`;
+      }
+
+      if (validationBox) {
+        const itemPillsHtml = Object.entries(itemBreakdown).map(([name, q]) => {
+          const qtyStr = q.scu > 0 ? `${q.scu} SCU` : '';
+          const unitsStr = q.units > 0 ? `${q.units} units` : '';
+          const combo = [qtyStr, unitsStr].filter(Boolean).join(' + ');
+          return `<span class="bg-panel px-2 py-0.5 rounded text-[10px] font-mono border border-line text-white">${escapeHtml(name)}: <span class="text-accent font-bold">${combo}</span></span>`;
+        }).join(" ");
+
+        let alertsHtml = "";
+        if (uncertainTasks.length > 0) {
+          alertsHtml += `
+            <div class="bg-orange-500/10 border border-orange-500/30 rounded p-2 text-[10px] text-orange-400 font-sans flex items-start gap-2">
+              <span class="font-bold shrink-0">⚠️ ATTENTION:</span>
+              <span>${uncertainTasks.length} tâche(s) avec association incertaine (collecte ambiguë ou manquante). Vérifiez chaque ligne avant l'importation.</span>
+            </div>
+          `;
+        }
+        if (missingDropoffs.length > 0) {
+          alertsHtml += `
+            <div class="bg-red-500/10 border border-red-500/30 rounded p-2 text-[10px] text-red-400 font-sans flex items-start gap-2">
+              <span class="font-bold shrink-0">⚠️ DESTINATION MANQUANTE:</span>
+              <span>${missingDropoffs.length} collecte(s) reconnue(s) sans livraison associée dans la capture. Spécifiez la destination via l'icône d'édition (crayon).</span>
+            </div>
+          `;
+        }
+        if (unparsed.length > 0) {
+          alertsHtml += `
+            <div class="bg-yellow-500/10 border border-yellow-500/30 rounded p-2 text-[10px] text-yellow-300 font-sans flex items-start gap-2">
+              <span class="font-bold shrink-0">ℹ️ OBJECTIFS NON INTERPRÉTÉS:</span>
+              <span>${unparsed.length} fragment(s) non reconnu(s) : <em>${escapeHtml(unparsed.join(' | '))}</em></span>
+            </div>
+          `;
+        }
+
+        validationBox.innerHTML = `
+          <div class="bg-panel2/60 border border-line rounded p-3 space-y-2">
+            <div class="flex items-center justify-between border-b border-line/40 pb-1.5">
+              <span class="text-[10px] font-display font-bold uppercase tracking-wider text-muted">Récapitulatif avant import</span>
+              <span class="text-[10px] font-mono text-accent font-bold">${detectedTasks.length} tâche(s) proposée(s)</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5 pt-1">
+              ${itemPillsHtml}
+            </div>
+            ${alertsHtml}
+            <p class="text-[9px] text-muted italic pt-1 border-t border-line/30">
+              Note : L'exhaustivité dépend de la capture OCR. Vous pouvez corriger manuellement chaque champ ci-dessous avec l'icône crayon avant de valider l'import.
+            </p>
+          </div>
+        `;
+      }
       
       ocrPreviewList.innerHTML = detectedTasks.map(t => {
         let warnings = [];
@@ -981,6 +1313,7 @@ export function bindManifestEvents() {
             task.dropoffStation = dropoffStation;
             task.notes = notes;
             task.uncertain = false;
+            task.warningMsg = null;
             if (task.pickupStations) {
               task.pickupStations = [pickupStation];
             }
@@ -1004,6 +1337,8 @@ export function bindManifestEvents() {
       ocrStatus.textContent = "Status: No tasks detected";
       ocrPreviewContainer.classList.add("hidden");
       ocrError.classList.remove("hidden");
+      if (validationBox) validationBox.innerHTML = "";
+      if (summaryBadge) summaryBadge.textContent = "";
     }
   };
 
@@ -1011,7 +1346,8 @@ export function bindManifestEvents() {
     const text = ocrTextarea.value;
     if (!text.trim()) return;
     
-    const { tasks, normText, fragments } = parsePrimaryObjectivesText(text);
+    const { tasks, normText, fragments, metrics } = parsePrimaryObjectivesText(text);
+    lastOcrMetrics = metrics || null;
     detectedTasks = tasks.map((t, idx) => ({
       id: t.id || `detected_${Date.now()}_${idx}`,
       ...t
@@ -1118,6 +1454,11 @@ export function bindManifestEvents() {
         saveManifest(data);
         
         detectedTasks = [];
+        lastOcrMetrics = null;
+        const validationBox = $("manifest-ocr-validation-box");
+        if (validationBox) validationBox.innerHTML = "";
+        const summaryBadge = $("manifest-ocr-summary-badge");
+        if (summaryBadge) summaryBadge.textContent = "";
         ocrPreviewContainer.classList.add("hidden");
         ocrTextarea.value = "";
         ocrStatus.textContent = "Status: Idle";
@@ -1129,6 +1470,11 @@ export function bindManifestEvents() {
     ocrClearBtn.addEventListener("click", () => {
       detectedTasks = [];
       editingDetectedTaskId = null;
+      lastOcrMetrics = null;
+      const validationBox = $("manifest-ocr-validation-box");
+      if (validationBox) validationBox.innerHTML = "";
+      const summaryBadge = $("manifest-ocr-summary-badge");
+      if (summaryBadge) summaryBadge.textContent = "";
       ocrPreviewContainer.classList.add("hidden");
       ocrStatus.textContent = "Status: Idle";
     });
@@ -1247,10 +1593,17 @@ function updateManifestUI() {
                 <input type="text" id="edit-dropoff-${t.id}" value="${escapeHtml(t.dropoffStation)}" class="veldex-input py-1 px-2 text-xs w-full bg-bg">
               </td>
               <td>
-                <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest ${t.status === 'pending' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-400' : (t.status === 'loaded' ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400' : 'bg-green-500/10 border border-green-500/20 text-green-400')}">${t.status}</span>
+                <select id="edit-status-${t.id}" class="veldex-select py-1 px-1.5 text-xs h-7 bg-bg border border-line text-white font-bold">
+                  <option value="pending" ${t.status === 'pending' ? 'selected' : ''}>PENDING</option>
+                  <option value="loaded" ${t.status === 'loaded' ? 'selected' : ''}>LOADED</option>
+                  <option value="delivered" ${t.status === 'delivered' ? 'selected' : ''}>DELIVERED</option>
+                </select>
               </td>
               <td>
-                <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest ${t.cargoZoneId ? 'bg-accent/10 border border-accent/20 text-accent' : 'bg-bg border border-line text-muted'}">${escapeHtml(getZoneNameById(t.cargoZoneId))}</span>
+                <select id="edit-zone-${t.id}" class="veldex-select py-1 px-1.5 text-xs h-7 bg-bg border border-line text-white">
+                  <option value="">No zone</option>
+                  ${activeZones.map(z => `<option value="${z.id}" ${t.cargoZoneId === z.id ? 'selected' : ''}>${escapeHtml(z.zone_name)}</option>`).join('')}
+                </select>
               </td>
               <td>
                 <input type="text" id="edit-notes-${t.id}" value="${escapeHtml(t.notes || '')}" placeholder="Add notes..." class="veldex-input py-1 px-2 text-xs w-full bg-bg">
@@ -1369,6 +1722,8 @@ function updateManifestUI() {
           const pickupInput = document.getElementById(`edit-pickup-${id}`);
           const dropoffInput = document.getElementById(`edit-dropoff-${id}`);
           const notesInput = document.getElementById(`edit-notes-${id}`);
+          const statusInput = document.getElementById(`edit-status-${id}`);
+          const zoneInput = document.getElementById(`edit-zone-${id}`);
           
           if (!itemInput || !qtyInput || !unitInput || !pickupInput || !dropoffInput || !notesInput) return;
           
@@ -1407,6 +1762,8 @@ function updateManifestUI() {
             foundTask.pickupStation = pickupStation;
             foundTask.dropoffStation = dropoffStation;
             foundTask.notes = notes;
+            if (statusInput) foundTask.status = statusInput.value;
+            if (zoneInput) foundTask.cargoZoneId = zoneInput.value;
             saveManifest(data);
           }
           
@@ -1436,13 +1793,17 @@ function updateManifestUI() {
   if (pickupPlanContainer) {
     const pGroups = {};
     tasks.forEach(t => {
-      // If multiple pickups, we just list it under "Multiple pickups" for now, or we could duplicate it across the locations.
-      // For simplicity, keep it grouped exactly by the pickupStation field.
       const p = t.pickupStation;
-      if (!pGroups[p]) pGroups[p] = { totalScu: 0, loadedScu: 0, deliveredScu: 0, items: [] };
-      pGroups[p].totalScu += t.quantity;
-      if (t.status === 'loaded') pGroups[p].loadedScu += t.quantity;
-      if (t.status === 'delivered') pGroups[p].deliveredScu += t.quantity;
+      const isScu = (t.unit || "SCU").trim().toLowerCase() === "scu";
+      const q = parseFloat(t.quantity) || 0;
+      if (!pGroups[p]) pGroups[p] = { totalScu: 0, loadedScu: 0, deliveredScu: 0, nonScuUnits: 0, items: [] };
+      if (isScu) {
+        pGroups[p].totalScu += q;
+        if (t.status === 'loaded') pGroups[p].loadedScu += q;
+        if (t.status === 'delivered') pGroups[p].deliveredScu += q;
+      } else {
+        pGroups[p].nonScuUnits += q;
+      }
       pGroups[p].items.push(t);
     });
 
@@ -1458,6 +1819,7 @@ function updateManifestUI() {
           ? `<button class="manifest-mark-btn whitespace-nowrap bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors ml-3" data-action="mark-pickup-loaded" data-pickup-station="${escapeHtml(station)}">Mark all loaded</button>`
           : '';
         
+        const extraUnits = group.nonScuUnits > 0 ? ` + ${group.nonScuUnits}u` : '';
         return `
         <div class="bg-panel2/40 border border-line rounded-sm p-4 hover:border-accent2/40 transition-colors">
           <div class="flex flex-col xl:flex-row xl:items-center justify-between mb-3 border-b border-line/50 pb-2 gap-2">
@@ -1465,7 +1827,7 @@ function updateManifestUI() {
               <h4 class="text-sm font-display font-bold text-accent2 uppercase tracking-[0.1em]">${station}</h4>
               ${bulkLoadedBtn}
             </div>
-            <span class="text-[10px] font-mono text-muted bg-bg px-2 py-0.5 rounded border border-line w-fit">${group.totalScu} SCU total &middot; ${group.loadedScu} loaded &middot; ${group.deliveredScu} delivered</span>
+            <span class="text-[10px] font-mono text-muted bg-bg px-2 py-0.5 rounded border border-line w-fit">${group.totalScu} SCU${extraUnits} total &middot; ${group.loadedScu} loaded &middot; ${group.deliveredScu} delivered</span>
           </div>
           <ul class="space-y-2">
             ${visibleItems.map(t => {
@@ -1486,7 +1848,9 @@ function updateManifestUI() {
                   <div class="w-24 shrink-0">${zoneSelector}</div>
                   ${t.status === 'pending' 
                     ? `<button class="manifest-mark-btn whitespace-nowrap w-[100px] h-[22px] flex items-center justify-center bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-2 rounded text-[10px] font-bold uppercase tracking-widest transition-colors shrink-0" data-id="${t.id}" data-action="loaded">Mark Loaded</button>`
-                    : `<span class="whitespace-nowrap w-[100px] h-[22px] flex items-center justify-center px-2 rounded text-[10px] uppercase font-bold tracking-widest shrink-0 ${t.status === 'loaded' ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400' : 'bg-green-500/10 border border-green-500/20 text-green-400'}">${t.status}</span>`
+                    : t.status === 'loaded'
+                      ? `<button class="manifest-mark-btn whitespace-nowrap w-[100px] h-[22px] flex items-center justify-center bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 rounded text-[10px] uppercase font-bold tracking-widest text-cyan-400 shrink-0" data-id="${t.id}" data-action="pending" title="Cliquer pour annuler le chargement et revenir à 'Pending'">Loaded &#x21ba;</button>`
+                      : `<span class="whitespace-nowrap w-[100px] h-[22px] flex items-center justify-center px-2 rounded text-[10px] uppercase font-bold tracking-widest shrink-0 bg-green-500/10 border border-green-500/20 text-green-400">${t.status}</span>`
                   }
                 </div>
               </li>
@@ -1508,10 +1872,16 @@ function updateManifestUI() {
     const dGroups = {};
     tasks.forEach(t => {
       const d = t.dropoffStation;
-      if (!dGroups[d]) dGroups[d] = { totalScu: 0, loadedScu: 0, deliveredScu: 0, items: [] };
-      dGroups[d].totalScu += t.quantity;
-      if (t.status === 'loaded') dGroups[d].loadedScu += t.quantity;
-      if (t.status === 'delivered') dGroups[d].deliveredScu += t.quantity;
+      const isScu = (t.unit || "SCU").trim().toLowerCase() === "scu";
+      const q = parseFloat(t.quantity) || 0;
+      if (!dGroups[d]) dGroups[d] = { totalScu: 0, loadedScu: 0, deliveredScu: 0, nonScuUnits: 0, items: [] };
+      if (isScu) {
+        dGroups[d].totalScu += q;
+        if (t.status === 'loaded') dGroups[d].loadedScu += q;
+        if (t.status === 'delivered') dGroups[d].deliveredScu += q;
+      } else {
+        dGroups[d].nonScuUnits += q;
+      }
       dGroups[d].items.push(t);
     });
 
@@ -1522,8 +1892,8 @@ function updateManifestUI() {
         const visibleItems = data.showDeliveredTasks ? group.items : group.items.filter(t => t.status !== 'delivered');
         if (visibleItems.length === 0) return '';
         
-        const hasLoaded = group.items.some(t => t.status === "loaded");
-        const bulkDeliveredBtn = hasLoaded 
+        const hasDeliverable = group.items.some(t => t.status === "loaded" || t.status === "pending");
+        const bulkDeliveredBtn = hasDeliverable
           ? `<button class="manifest-mark-btn whitespace-nowrap bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors ml-3" data-action="mark-dropoff-delivered" data-dropoff-station="${escapeHtml(station)}">Mark all delivered</button>`
           : '';
 
@@ -1573,6 +1943,7 @@ function updateManifestUI() {
           groupZoneContent = groupZoneBadge;
         }
         
+        const extraUnits = group.nonScuUnits > 0 ? ` + ${group.nonScuUnits}u` : '';
         return `
         <div class="bg-panel2/40 border border-line rounded-sm p-4 hover:border-green-400/40 transition-colors">
           <div class="flex flex-col xl:flex-row xl:items-center justify-between mb-3 border-b border-line/50 pb-2 gap-2">
@@ -1581,14 +1952,16 @@ function updateManifestUI() {
               ${groupZoneContent}
               ${bulkDeliveredBtn}
             </div>
-            <span class="text-[10px] font-mono text-muted bg-bg px-2 py-0.5 rounded border border-line w-fit">${group.totalScu} SCU total &middot; ${group.loadedScu} loaded &middot; ${group.deliveredScu} delivered</span>
+            <span class="text-[10px] font-mono text-muted bg-bg px-2 py-0.5 rounded border border-line w-fit">${group.totalScu} SCU${extraUnits} total &middot; ${group.loadedScu} loaded &middot; ${group.deliveredScu} delivered</span>
           </div>
           <ul class="space-y-2">
             ${visibleItems.map(t => {
-              const zoneName = getZoneNameById(t.cargoZoneId);
-              const zoneBadge = t.cargoZoneId 
-                ? `<span class="w-full text-center bg-accent/10 border border-accent/20 text-accent px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest block">${escapeHtml(zoneName)}</span>`
-                : `<span class="w-full text-center bg-bg border border-line text-muted px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest block">No zone</span>`;
+              const zoneOptions = `<option value="">No zone</option>` + activeZones.map(z => `<option value="${z.id}" ${t.cargoZoneId === z.id ? 'selected' : ''}>${escapeHtml(z.zone_name)}</option>`).join('');
+              const zoneSelector = t.status === 'delivered'
+                ? (t.cargoZoneId
+                    ? `<span class="w-full text-center bg-accent/10 border border-accent/20 text-accent px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest block truncate" title="${escapeHtml(getZoneNameById(t.cargoZoneId))}">${escapeHtml(getZoneNameById(t.cargoZoneId))}</span>`
+                    : `<span class="w-full text-center bg-bg border border-line text-muted px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest block">No zone</span>`)
+                : `<select class="manifest-zone-select bg-bg border border-line rounded text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 cursor-pointer outline-none text-white/80 w-full h-[22px]" data-id="${t.id}">${zoneOptions}</select>`;
                 
               return `
               <li class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[12px] font-sans">
@@ -1601,12 +1974,12 @@ function updateManifestUI() {
                   </span>
                 </div>
                 <div class="flex items-center justify-end gap-2 shrink-0 min-w-max">
-                  <div class="w-[120px] shrink-0 flex justify-end">${zoneBadge}</div>
+                  <div class="w-[120px] shrink-0 flex justify-end">${zoneSelector}</div>
                   ${t.status === 'pending'
-                    ? `<span class="whitespace-nowrap w-[150px] px-4 h-[22px] flex items-center justify-center py-0.5 bg-bg border border-line rounded text-[10px] uppercase text-muted font-bold tracking-widest">Not Loaded</span>`
+                    ? `<button class="manifest-mark-btn whitespace-nowrap w-[150px] px-2 h-[22px] flex items-center justify-center bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/30 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors shrink-0" data-id="${t.id}" data-action="delivered" data-from-status="pending" title="Cliquer pour confirmer la livraison directe (tâche non marquée chargée)">Deliver (Pending)</button>`
                     : t.status === 'loaded'
-                      ? `<button class="manifest-mark-btn whitespace-nowrap w-[150px] px-4 h-[22px] flex items-center justify-center bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors" data-id="${t.id}" data-action="delivered">Mark Delivered</button>`
-                      : `<span class="whitespace-nowrap w-[150px] px-4 h-[22px] flex items-center justify-center py-0.5 bg-green-500/10 border border-green-500/20 rounded text-[10px] uppercase text-green-400 font-bold tracking-widest">Delivered</span>`
+                      ? `<button class="manifest-mark-btn whitespace-nowrap w-[150px] px-4 h-[22px] flex items-center justify-center bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors shrink-0" data-id="${t.id}" data-action="delivered">Mark Delivered</button>`
+                      : `<button class="manifest-mark-btn whitespace-nowrap w-[150px] px-4 h-[22px] flex items-center justify-center py-0.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 rounded text-[10px] uppercase text-green-400 font-bold tracking-widest transition-colors shrink-0" data-id="${t.id}" data-action="loaded" title="Cliquer pour annuler la livraison et revenir à 'Loaded'">Delivered &#x21ba;</button>`
                   }
                 </div>
               </li>
@@ -1636,8 +2009,14 @@ function updateManifestUI() {
       } else {
         const totalCapacityScu = activeZones.reduce((sum, z) => sum + parseFloat(z.capacity_scu), 0);
         const gridZoneIds = new Set(activeZones.map(z => z.id));
+
+        // ONLY loaded tasks count towards current physical hold usage
         const totalLoadedScu = tasks
-          .filter(t => gridZoneIds.has(t.cargoZoneId) && (t.unit || "SCU").trim().toLowerCase() === "scu")
+          .filter(t => gridZoneIds.has(t.cargoZoneId) && t.status === "loaded" && (t.unit || "SCU").trim().toLowerCase() === "scu")
+          .reduce((sum, t) => sum + parseFloat(t.quantity || 0), 0);
+
+        const totalPlannedScu = tasks
+          .filter(t => gridZoneIds.has(t.cargoZoneId) && t.status === "pending" && (t.unit || "SCU").trim().toLowerCase() === "scu")
           .reduce((sum, t) => sum + parseFloat(t.quantity || 0), 0);
         
         const pct = totalCapacityScu > 0 ? Math.round((totalLoadedScu / totalCapacityScu) * 100) : 0;
@@ -1645,37 +2024,64 @@ function updateManifestUI() {
         
         headerSummaryHtml = `
           <div class="mt-2 md:mt-0 md:ml-6 md:pl-6 md:border-l md:border-line">
-            <div class="text-[10px] font-display font-bold text-muted uppercase tracking-widest mb-0.5">Capacity Usage</div>
-            <div class="text-sm font-mono font-bold ${isGridOver ? 'text-red-400' : 'text-accent'}">${totalLoadedScu} / ${totalCapacityScu} SCU &middot; ${isGridOver ? 'Over capacity' : pct + '% used'}</div>
+            <div class="text-[10px] font-display font-bold text-muted uppercase tracking-widest mb-0.5">Hold Usage (Loaded)</div>
+            <div class="text-sm font-mono font-bold ${isGridOver ? 'text-red-400' : 'text-accent'}">
+              ${totalLoadedScu} / ${totalCapacityScu} SCU &middot; ${isGridOver ? 'Over capacity' : pct + '% loaded'}
+              ${totalPlannedScu > 0 ? `<span class="text-xs font-normal text-orange-400/90 ml-2">(+${totalPlannedScu} SCU planned)</span>` : ''}
+            </div>
           </div>
         `;
         
         zonesHtml = activeZones.map(z => {
           const tasksInZone = tasks.filter(t => t.cargoZoneId === z.id);
-          const usedScu = tasksInZone
-            .filter(t => (t.unit || "SCU").trim().toLowerCase() === "scu")
+          const loadedScu = tasksInZone
+            .filter(t => t.status === "loaded" && (t.unit || "SCU").trim().toLowerCase() === "scu")
             .reduce((sum, t) => sum + parseFloat(t.quantity || 0), 0);
+          const plannedScu = tasksInZone
+            .filter(t => t.status === "pending" && (t.unit || "SCU").trim().toLowerCase() === "scu")
+            .reduce((sum, t) => sum + parseFloat(t.quantity || 0), 0);
+
           const capacity = parseFloat(z.capacity_scu);
-          const isOver = usedScu > capacity;
+          const isOver = loadedScu > capacity;
+          const isPlannedOver = !isOver && (loadedScu + plannedScu > capacity);
           
           return `
-            <div class="bg-panel2/40 border ${isOver ? 'border-red-500/50' : 'border-line/50'} rounded-sm p-3">
+            <div class="bg-panel2/40 border ${isOver ? 'border-red-500/50' : (isPlannedOver ? 'border-orange-500/40' : 'border-line/50')} rounded-sm p-3">
               <div class="flex items-center justify-between mb-2">
                 <h4 class="text-[12px] font-display font-bold ${isOver ? 'text-red-400' : 'text-white'} uppercase tracking-widest">${escapeHtml(z.zone_name)}</h4>
-                <span class="text-[10px] font-mono font-bold ${isOver ? 'text-red-400 bg-red-500/10 border-red-500/30' : 'text-accent bg-accent/10 border-accent/20'} px-2 py-0.5 rounded border">${usedScu} / ${capacity} SCU</span>
+                <div class="flex items-center gap-1">
+                  <span class="text-[10px] font-mono font-bold ${isOver ? 'text-red-400 bg-red-500/10 border-red-500/30' : 'text-accent bg-accent/10 border-accent/20'} px-2 py-0.5 rounded border">
+                    ${loadedScu} / ${capacity} SCU
+                  </span>
+                  ${plannedScu > 0 ? `<span class="text-[9px] font-mono text-orange-400 bg-orange-500/10 border border-orange-500/20 px-1 py-0.5 rounded" title="Planned cargo">+${plannedScu}p</span>` : ''}
+                </div>
               </div>
-              ${tasksInZone.length === 0 
-                ? `<p class="text-[10px] text-muted italic">Empty</p>` 
+              ${tasksInZone.length === 0
+                ? `<p class="text-[10px] text-muted italic">Empty</p>`
                 : `<ul class="space-y-1.5 mt-3">
-                    ${tasksInZone.map(t => `
-                      <li class="flex items-center justify-between gap-2 text-[11px] font-sans text-muted">
+                    ${tasksInZone.map(t => {
+                      const isLoaded = t.status === 'loaded';
+                      const isPending = t.status === 'pending';
+                      const isDelivered = t.status === 'delivered';
+                      const statusBadge = isLoaded
+                        ? `<span class="text-[8px] uppercase tracking-wider font-bold bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 px-1 rounded shrink-0">LOADED</span>`
+                        : isPending
+                          ? `<span class="text-[8px] uppercase tracking-wider font-bold bg-orange-500/10 border border-orange-500/20 text-orange-400 px-1 rounded shrink-0">PLAN</span>`
+                          : `<span class="text-[8px] uppercase tracking-wider font-bold bg-green-500/10 border border-green-500/20 text-green-400/60 px-1 rounded shrink-0">DONE</span>`;
+
+                      return `
+                      <li class="flex items-center justify-between gap-2 text-[11px] font-sans ${isDelivered ? 'text-muted/40 line-through' : (isLoaded ? 'text-white' : 'text-muted/80')}">
                         <div class="flex items-center gap-1.5 min-w-0">
-                          <span class="w-1 h-1 bg-muted/50 rounded-full shrink-0"></span>
-                          <span class="text-white truncate" title="${t.quantity} SCU ${t.itemName}">${t.quantity} SCU ${t.itemName}</span>
+                          <span class="w-1 h-1 ${isLoaded ? 'bg-accent' : (isPending ? 'bg-orange-400' : 'bg-muted/30')} rounded-full shrink-0"></span>
+                          <span class="truncate" title="${t.quantity} SCU ${t.itemName}">${t.quantity} SCU ${t.itemName}</span>
                         </div>
-                        <span class="opacity-60 flex items-center gap-1 shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg> ${t.dropoffStation}</span>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                          <span class="opacity-60 flex items-center gap-0.5 text-[10px]"><svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg> ${escapeHtml(t.dropoffStation)}</span>
+                          ${statusBadge}
+                        </div>
                       </li>
-                    `).join('')}
+                      `;
+                    }).join('')}
                    </ul>`
               }
             </div>
